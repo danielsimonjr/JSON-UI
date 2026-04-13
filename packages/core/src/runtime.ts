@@ -256,3 +256,171 @@ export function createStagingBuffer(): StagingBuffer {
     },
   };
 }
+
+/**
+ * Observable store for durable application data, keyed by `/`-separated paths.
+ * Same identity-stability and synchronous-notification contract as StagingBuffer.
+ */
+export interface ObservableDataModel {
+  get(path: string): JSONValue | undefined;
+  set(path: string, value: JSONValue): void;
+  delete(path: string): void;
+  snapshot(): Readonly<Record<string, JSONValue>>;
+  subscribe(callback: () => void): () => void;
+}
+
+/**
+ * Internal helper: get a value at a `/`-separated path from a nested object.
+ */
+function getAtPath(
+  root: Record<string, JSONValue>,
+  path: string,
+): JSONValue | undefined {
+  if (path === "") return root;
+  const parts = path.split("/").filter((p) => p.length > 0);
+  let current: JSONValue | undefined = root;
+  for (const part of parts) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      Array.isArray(current)
+    ) {
+      return undefined;
+    }
+    current = (current as Record<string, JSONValue>)[part];
+    if (current === undefined) return undefined;
+  }
+  return current;
+}
+
+/**
+ * Internal helper: set a value at a `/`-separated path, creating intermediate
+ * plain objects as needed. Mutates `root` in place.
+ */
+function setAtPath(
+  root: Record<string, JSONValue>,
+  path: string,
+  value: JSONValue,
+): void {
+  const parts = path.split("/").filter((p) => p.length > 0);
+  if (parts.length === 0) return;
+  let current: Record<string, JSONValue> = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = parts[i]!;
+    const next = current[key];
+    if (
+      next === undefined ||
+      next === null ||
+      typeof next !== "object" ||
+      Array.isArray(next)
+    ) {
+      const fresh: Record<string, JSONValue> = {};
+      current[key] = fresh;
+      current = fresh;
+    } else {
+      current = next as Record<string, JSONValue>;
+    }
+  }
+  current[parts[parts.length - 1]!] = value;
+}
+
+/**
+ * Internal helper: delete the leaf at a `/`-separated path. Does not prune
+ * empty parent containers (Open Question 2 in the spec — leaning leave-empty).
+ */
+function deleteAtPath(root: Record<string, JSONValue>, path: string): boolean {
+  const parts = path.split("/").filter((p) => p.length > 0);
+  if (parts.length === 0) return false;
+  let current: Record<string, JSONValue> | undefined = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const next = current?.[parts[i]!];
+    if (
+      next === undefined ||
+      next === null ||
+      typeof next !== "object" ||
+      Array.isArray(next)
+    ) {
+      return false;
+    }
+    current = next as Record<string, JSONValue>;
+  }
+  const lastKey = parts[parts.length - 1]!;
+  if (current && lastKey in current) {
+    delete current[lastKey];
+    return true;
+  }
+  return false;
+}
+
+export function createObservableDataModel(
+  initialData?: Record<string, JSONValue>,
+): ObservableDataModel {
+  // Validate at construction time — throws InitialDataNotSerializableError on
+  // any disqualified value.
+  if (initialData !== undefined) {
+    validateJSONValue(initialData, "");
+  }
+
+  const root: Record<string, JSONValue> = initialData
+    ? structuredClone(initialData)
+    : {};
+  // Use a Map keyed by a unique symbol per subscription so that the same
+  // callback function can be registered multiple times as independent
+  // subscriptions. Matches the StagingBuffer listener pattern (Task 4 fix).
+  const listeners = new Map<symbol, () => void>();
+  let cachedSnapshot: Readonly<Record<string, JSONValue>> | null = null;
+
+  const invalidateAndNotify = () => {
+    cachedSnapshot = null;
+    for (const listener of Array.from(listeners.values())) {
+      try {
+        listener();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[ObservableDataModel] subscriber threw:", err);
+      }
+    }
+  };
+
+  return {
+    get(path) {
+      return getAtPath(root, path);
+    },
+    set(path, value) {
+      setAtPath(root, path, value);
+      invalidateAndNotify();
+    },
+    delete(path) {
+      if (deleteAtPath(root, path)) {
+        invalidateAndNotify();
+      }
+    },
+    snapshot() {
+      if (cachedSnapshot === null) {
+        // Deep clone via structuredClone — required for true point-in-time
+        // isolation. A bare reference-cache (`cachedSnapshot = root`) would
+        // alias the live mutable object: the previously-returned snapshot
+        // would silently mutate when callers later wrote, breaking React's
+        // useSyncExternalStore tearing protection (Object.is(prev, next)
+        // would return true even after content changed). A shallow clone
+        // (`{...root}`) is also insufficient because nested objects would
+        // still alias the originals. structuredClone gives a true frozen-
+        // in-time copy. Cost is O(n) per write (the cache absorbs repeated
+        // reads) — acceptable for v1 since useSyncExternalStore only
+        // re-snapshots on subscribe notifications.
+        cachedSnapshot = structuredClone(root);
+      }
+      return cachedSnapshot;
+    },
+    subscribe(callback) {
+      const id = Symbol();
+      listeners.set(id, callback);
+      let unsubscribed = false;
+      return () => {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        listeners.delete(id);
+      };
+    },
+  };
+}

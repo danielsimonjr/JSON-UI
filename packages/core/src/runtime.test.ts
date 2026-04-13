@@ -1,7 +1,10 @@
 import { describe, test, expect, vi } from "vitest";
 import {
   createStagingBuffer,
+  createObservableDataModel,
+  InitialDataNotSerializableError,
   type StagingBuffer,
+  type ObservableDataModel,
   type FieldId,
   type JSONValue,
 } from "./runtime";
@@ -193,5 +196,126 @@ describe("createStagingBuffer - reconcile", () => {
     buf.set("drop", "no");
     buf.reconcile(new Set(["keep"]));
     expect(buf.snapshot()).toEqual({ keep: "yes" });
+  });
+});
+
+describe("createObservableDataModel - basic operations", () => {
+  test("creates a model with all interface methods", () => {
+    const model: ObservableDataModel = createObservableDataModel();
+    expect(typeof model.get).toBe("function");
+    expect(typeof model.set).toBe("function");
+    expect(typeof model.delete).toBe("function");
+    expect(typeof model.snapshot).toBe("function");
+    expect(typeof model.subscribe).toBe("function");
+  });
+});
+
+describe("createObservableDataModel - paths", () => {
+  test("set and get with a single-segment path", () => {
+    const m = createObservableDataModel();
+    m.set("name", "Alice");
+    expect(m.get("name")).toBe("Alice");
+  });
+  test("set and get with a nested path", () => {
+    const m = createObservableDataModel();
+    m.set("user/profile/name", "Bob");
+    expect(m.get("user/profile/name")).toBe("Bob");
+    expect(m.get("user/profile")).toEqual({ name: "Bob" });
+  });
+  test("get returns undefined for missing path", () => {
+    const m = createObservableDataModel();
+    expect(m.get("missing")).toBeUndefined();
+    expect(m.get("missing/deeper")).toBeUndefined();
+  });
+  test("delete removes a leaf", () => {
+    const m = createObservableDataModel();
+    m.set("user/name", "Carol");
+    m.delete("user/name");
+    expect(m.get("user/name")).toBeUndefined();
+  });
+  test("initialData seeds the store", () => {
+    const m = createObservableDataModel({ user: { name: "Dan" } });
+    expect(m.get("user/name")).toBe("Dan");
+  });
+});
+
+describe("createObservableDataModel - initialData validation", () => {
+  test("throws on Date in initialData", () => {
+    expect(() =>
+      createObservableDataModel({ when: new Date() } as never),
+    ).toThrow(InitialDataNotSerializableError);
+  });
+  test("throws on Map nested in initialData", () => {
+    expect(() =>
+      createObservableDataModel({ data: new Map() } as never),
+    ).toThrow(InitialDataNotSerializableError);
+  });
+  test("throws on function in initialData", () => {
+    expect(() => createObservableDataModel({ fn: () => 0 } as never)).toThrow(
+      InitialDataNotSerializableError,
+    );
+  });
+  test("error path reflects nested location", () => {
+    expect.assertions(2);
+    expect(() =>
+      createObservableDataModel({ user: { dob: new Date() } } as never),
+    ).toThrow(InitialDataNotSerializableError);
+    try {
+      createObservableDataModel({ user: { dob: new Date() } } as never);
+    } catch (err) {
+      expect((err as InitialDataNotSerializableError).path).toBe("/user/dob");
+    }
+  });
+  test("accepts deeply nested plain object", () => {
+    expect(() =>
+      createObservableDataModel({
+        user: { name: "Dan", scores: [1, 2, 3], meta: { active: true } },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("createObservableDataModel - snapshot identity and notification", () => {
+  test("snapshot is identity-stable across calls with no mutation", () => {
+    const m = createObservableDataModel({ x: 1 });
+    const a = m.snapshot();
+    const b = m.snapshot();
+    expect(a).toBe(b);
+  });
+  test("snapshot reference changes after set", () => {
+    const m = createObservableDataModel();
+    const before = m.snapshot();
+    m.set("x", 1);
+    const after = m.snapshot();
+    expect(after).not.toBe(before);
+  });
+  test("subscriber fires synchronously inside set", () => {
+    const m = createObservableDataModel();
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.set("x", 1);
+    expect(calls).toBe(1);
+  });
+  test("subscriber fires synchronously inside delete", () => {
+    const m = createObservableDataModel({ x: 1 });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.delete("x");
+    expect(calls).toBe(1);
+  });
+  test("unsubscribe stops notifications", () => {
+    const m = createObservableDataModel();
+    let calls = 0;
+    const unsub = m.subscribe(() => {
+      calls++;
+    });
+    m.set("x", 1);
+    unsub();
+    m.set("y", 2);
+    expect(calls).toBe(1);
   });
 });
