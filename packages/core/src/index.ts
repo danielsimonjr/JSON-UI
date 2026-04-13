@@ -89,3 +89,21 @@ export type {
 } from "./catalog";
 
 export { createCatalog, generateCatalogPrompt } from "./catalog";
+
+// Runtime types — see runtime.ts and the spec at
+// docs/specs/2026-04-13-core-runtime-types-design.md
+export type {
+  FieldId,
+  StagingSnapshot,
+  JSONValue,
+  StagingBuffer,
+  ObservableDataModel,
+  IntentEvent,
+} from "./runtime";
+
+export {
+  createStagingBuffer,
+  createObservableDataModel,
+  validateJSONValue,
+  InitialDataNotSerializableError,
+} from "./runtime";
