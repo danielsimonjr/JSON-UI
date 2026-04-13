@@ -173,3 +173,86 @@ export function validateJSONValue(
     );
   }
 }
+
+/**
+ * Observable store for in-progress user input. See spec for the full contract:
+ * identity-stable snapshots, synchronous notification, idempotent subscribe.
+ */
+export interface StagingBuffer {
+  get(fieldId: FieldId): JSONValue | undefined;
+  set(fieldId: FieldId, value: JSONValue): void;
+  delete(fieldId: FieldId): void;
+  has(fieldId: FieldId): boolean;
+  snapshot(): StagingSnapshot;
+  reconcile(liveIds: ReadonlySet<FieldId>): void;
+  subscribe(callback: () => void): () => void;
+}
+
+export function createStagingBuffer(): StagingBuffer {
+  const store = new Map<FieldId, JSONValue>();
+  // Use a Map keyed by a unique symbol per subscription so that the same
+  // callback function can be registered multiple times as independent
+  // subscriptions. This satisfies the spec requirement that registering
+  // the same callback twice produces two independent subscriptions.
+  const listeners = new Map<symbol, () => void>();
+  let cachedSnapshot: StagingSnapshot | null = null;
+
+  const invalidateAndNotify = () => {
+    cachedSnapshot = null;
+    // Snapshot the listener values so a listener that unsubscribes itself
+    // mid-notify does not affect the current iteration.
+    for (const listener of Array.from(listeners.values())) {
+      try {
+        listener();
+      } catch (err) {
+        // Swallow listener errors per spec; subscribers MUST NOT crash the store.
+        // eslint-disable-next-line no-console
+        console.error("[StagingBuffer] subscriber threw:", err);
+      }
+    }
+  };
+
+  return {
+    get(fieldId) {
+      return store.get(fieldId);
+    },
+    set(fieldId, value) {
+      store.set(fieldId, value);
+      invalidateAndNotify();
+    },
+    delete(fieldId) {
+      if (store.delete(fieldId)) {
+        invalidateAndNotify();
+      }
+    },
+    has(fieldId) {
+      return store.has(fieldId);
+    },
+    snapshot() {
+      if (cachedSnapshot === null) {
+        cachedSnapshot = Object.fromEntries(store);
+      }
+      return cachedSnapshot;
+    },
+    reconcile(liveIds) {
+      for (const key of Array.from(store.keys())) {
+        if (!liveIds.has(key)) {
+          store.delete(key);
+        }
+      }
+      // Always notify on reconcile, even if nothing was dropped — the call
+      // itself is a mutation event in the store's contract.
+      invalidateAndNotify();
+    },
+    subscribe(callback) {
+      const id = Symbol();
+      listeners.set(id, callback);
+      let unsubscribed = false;
+      return () => {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        listeners.delete(id);
+      };
+    },
+  };
+}
