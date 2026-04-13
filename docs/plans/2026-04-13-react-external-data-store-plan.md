@@ -55,6 +55,7 @@ node -e "const c = require('./packages/core/dist/index.js'); console.log(typeof 
 ```
 
 Expected output:
+
 ```
 function function
 ```
@@ -78,6 +79,7 @@ Open `packages/react/src/contexts/data.tsx` in full. The current implementation 
 - [ ] **Step 4: Read the existing `data.test.tsx` end-to-end**
 
 Open `packages/react/src/contexts/data.test.tsx` and read every assertion. Pay particular attention to:
+
 - The `set("/user/name", ...)` leading-slash convention
 - The `onDataChange("/count", 42)` 2-arg shape (NOT 3-arg)
 - `update({ "/name": "John", "/age": 30 })` multi-key shape
@@ -91,6 +93,7 @@ Your refactor must keep all of these working byte-for-byte.
 **Goal:** Move the current `useState` logic into a private `InternalDataProvider` component. `DataProvider` becomes a thin dispatcher that today always picks `InternalDataProvider`. After this task, the existing `data.test.tsx` MUST still pass with zero changes — this is a pure refactor.
 
 **Files:**
+
 - Modify: `packages/react/src/contexts/data.tsx`
 
 - [ ] **Step 1: Make the refactor**
@@ -333,6 +336,7 @@ No commit — this task is a verification gate.
 **Goal:** Replace the `ExternalDataProvider` stub with a real `useSyncExternalStore` implementation. TDD: write the failing tests first (in a new test file), then implement.
 
 **Files:**
+
 - Create: `packages/react/src/contexts/data-external-store.test.tsx`
 - Modify: `packages/react/src/contexts/data.tsx` — replace the stub `ExternalDataProvider` body
 
@@ -490,10 +494,7 @@ function ExternalDataProvider({
     store.snapshot, // SSR snapshot — same as client snapshot for non-SSR use
   ) as DataModel;
 
-  const get = useCallback(
-    (path: string) => store.get(path),
-    [store],
-  );
+  const get = useCallback((path: string) => store.get(path), [store]);
 
   const set = useCallback(
     (path: string, value: unknown) => {
@@ -560,6 +561,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/react/src/context
 **Goal:** Cover Invariants 2 through 12 from the spec. Each test is a small, focused assertion on one invariant.
 
 **Files:**
+
 - Modify: `packages/react/src/contexts/data-external-store.test.tsx`
 
 - [ ] **Step 1: Write the test for "external mutation triggers re-render" (Invariant 3)**
@@ -832,7 +834,11 @@ it("toggles between external and internal mode without warnings (Invariant 8)", 
     .mockImplementation(() => {});
 
   function Probe() {
-    return <span data-testid="value">{useDataValue<string>("/value") ?? "none"}</span>;
+    return (
+      <span data-testid="value">
+        {useDataValue<string>("/value") ?? "none"}
+      </span>
+    );
   }
 
   // Start in external mode.
@@ -958,6 +964,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/react/src/context
 **Goal:** Verify the React provider actually works with the real `createObservableDataModel` from `@json-ui/core`, not just the mock. This catches contract drift between the mock and the real implementation (e.g., if the real store's path semantics differ).
 
 **Files:**
+
 - Create: `packages/react/src/contexts/data-real-store.test.tsx`
 
 - [ ] **Step 1: Write the integration test file**
@@ -1105,20 +1112,20 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/react/src/context
 
 Each invariant from `2026-04-13-react-external-data-store-design.md` maps to a test:
 
-| # | Invariant | Test location |
-|---|---|---|
-| 1 | Internal mode backward compatibility | `data.test.tsx` (unmodified, run in Tasks 2/3/5/6) |
-| 2 | External mode renders from store snapshot | `data-external-store.test.tsx` Task 4 Step 1; `data-real-store.test.tsx` Task 6 Step 1 |
-| 3 | External mutation triggers re-render | `data-external-store.test.tsx` Task 5 Step 1; `data-real-store.test.tsx` Task 6 Step 1 |
-| 4 | Internal `set` in external mode writes to store | `data-external-store.test.tsx` Task 5 Step 3; `data-real-store.test.tsx` Task 6 Step 1 |
-| 5 | `onDataChange` in external mode | `data-external-store.test.tsx` Task 5 Step 4 (DOCUMENTED PARTIAL — see test note) |
-| 6 | Identity-stable snapshots prevent warnings | `data-external-store.test.tsx` Task 5 Step 5 |
-| 7 | Non-stable snapshots DO trigger warnings | `data-external-store.test.tsx` Task 5 Step 6 |
-| 8 | Rules of hooks respected | Implicitly verified by all tests (test failure indicates rules-of-hooks violation) |
-| 9 | `update` fires callbacks in order | `data-external-store.test.tsx` Task 5 Step 7 |
-| 10 | No changes to other contexts | Files NOT modified — verified by inspecting commit list |
-| 11 | Store swap | `data-external-store.test.tsx` Task 5 Step 9 |
-| 12 | `initialData` ignored in external mode | `data-external-store.test.tsx` Task 5 Step 8 |
+| #   | Invariant                                       | Test location                                                                          |
+| --- | ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1   | Internal mode backward compatibility            | `data.test.tsx` (unmodified, run in Tasks 2/3/5/6)                                     |
+| 2   | External mode renders from store snapshot       | `data-external-store.test.tsx` Task 4 Step 1; `data-real-store.test.tsx` Task 6 Step 1 |
+| 3   | External mutation triggers re-render            | `data-external-store.test.tsx` Task 5 Step 1; `data-real-store.test.tsx` Task 6 Step 1 |
+| 4   | Internal `set` in external mode writes to store | `data-external-store.test.tsx` Task 5 Step 3; `data-real-store.test.tsx` Task 6 Step 1 |
+| 5   | `onDataChange` in external mode                 | `data-external-store.test.tsx` Task 5 Step 4 (DOCUMENTED PARTIAL — see test note)      |
+| 6   | Identity-stable snapshots prevent warnings      | `data-external-store.test.tsx` Task 5 Step 5                                           |
+| 7   | Non-stable snapshots DO trigger warnings        | `data-external-store.test.tsx` Task 5 Step 6                                           |
+| 8   | Rules of hooks respected                        | Implicitly verified by all tests (test failure indicates rules-of-hooks violation)     |
+| 9   | `update` fires callbacks in order               | `data-external-store.test.tsx` Task 5 Step 7                                           |
+| 10  | No changes to other contexts                    | Files NOT modified — verified by inspecting commit list                                |
+| 11  | Store swap                                      | `data-external-store.test.tsx` Task 5 Step 9                                           |
+| 12  | `initialData` ignored in external mode          | `data-external-store.test.tsx` Task 5 Step 8                                           |
 
 **Known divergence from spec text:** Invariant 5 asserts `onDataChange` fires for writes from EITHER the React side or the direct `store.set` side. The `subscribe(callback: () => void)` contract makes the latter impossible (subscribers receive no payload). The plan's test documents the actual achievable behavior: `onDataChange` fires only for React-side writes; external-side writes still trigger re-renders via Invariant 3. The PR description should call this out for review.
 

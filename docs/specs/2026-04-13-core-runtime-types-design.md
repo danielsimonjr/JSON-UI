@@ -6,7 +6,7 @@
 
 ## Context
 
-The headless renderer spec (`2026-04-13-headless-renderer-design.md`) defines a dual-backend architecture where `@json-ui/react` and `@json-ui/headless` run simultaneously against shared state. For the two backends to actually share state, they both need to import the *same* types — not structurally compatible parallel copies. The shared types must live in the common dependency, which is `@json-ui/core`.
+The headless renderer spec (`2026-04-13-headless-renderer-design.md`) defines a dual-backend architecture where `@json-ui/react` and `@json-ui/headless` run simultaneously against shared state. For the two backends to actually share state, they both need to import the _same_ types — not structurally compatible parallel copies. The shared types must live in the common dependency, which is `@json-ui/core`.
 
 The headless renderer spec describes these types in its "Runtime Types and the Observable Store Pattern" section. That section is the authoritative definition. This spec is a delivery spec: it defines how those types land in `@json-ui/core` as a concrete module, what the implementation requirements are, and how the additions integrate with core's existing exports without breaking anything.
 
@@ -31,6 +31,7 @@ New file: `packages/core/src/runtime.ts`
 Modified file: `packages/core/src/index.ts` (add re-exports)
 
 New test files:
+
 - `packages/core/src/runtime.test.ts` — covers the core behaviors
 - `packages/core/src/runtime-validation.test.ts` — covers the disqualified-value validation matrix
 
@@ -136,7 +137,7 @@ Key implementation notes:
 
 - **Identity-stable snapshots.** `cachedSnapshot` is set once after each mutation and reused until the next mutation. Two back-to-back `snapshot()` calls with no intervening write return the same reference. Required for React's `useSyncExternalStore`.
 - **Listener errors are swallowed.** A subscriber callback that throws must not affect the store's state or prevent other subscribers from firing. Errors are logged via `console.error` and discarded.
-- **Set-during-notify is allowed.** A subscriber that calls `set` or `delete` during its own notification does not cause infinite recursion *within that call* — the nested mutation runs, invalidates the cache, and notifies other subscribers (the notifying listener is already in the Array.from'd iteration set, so it doesn't re-notify itself within the current loop). Tests must verify this behavior and document the iteration semantics.
+- **Set-during-notify is allowed.** A subscriber that calls `set` or `delete` during its own notification does not cause infinite recursion _within that call_ — the nested mutation runs, invalidates the cache, and notifies other subscribers (the notifying listener is already in the Array.from'd iteration set, so it doesn't re-notify itself within the current loop). Tests must verify this behavior and document the iteration semantics.
 - **Registering the same callback twice creates two independent subscriptions.** Each call to `subscribe` returns a distinct unsubscribe handle.
 - **Double-unsubscribe is a no-op.** The returned unsubscribe closes over a local `unsubscribed` flag.
 
@@ -157,10 +158,12 @@ Structural recursion validator. Rules:
 **Allowed leaves:** `null`, `true`, `false`, finite `number` (excluding `NaN`, `Infinity`, `-Infinity`), `string`.
 
 **Allowed containers:**
+
 - `Array.isArray(value)` is true, AND every element passes `validateJSONValue(element, path + "/" + index)`.
 - `typeof value === "object"`, `value !== null`, AND (`Object.getPrototypeOf(value) === Object.prototype` OR `Object.getPrototypeOf(value) === null`), AND every enumerable own-property value passes `validateJSONValue(v, path + "/" + key)`. No symbol keys allowed.
 
 **Disqualified:** everything else, explicitly including:
+
 - `undefined`
 - `BigInt`
 - `Symbol`

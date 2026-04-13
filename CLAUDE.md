@@ -12,13 +12,14 @@ Upstream lineage: `vercel-labs/json-render` → `danielsimonjr/JSON-UI`. We are 
 
 npm workspaces monorepo. Three packages under `packages/`:
 
-| Package | Purpose | Status |
-|---|---|---|
-| `@json-ui/core` | Framework-agnostic Zod catalog, types, visibility, validation, actions. The only runtime dependency is `zod`. | Live |
-| `@json-ui/react` | React 19 renderer with `DataProvider`, `ActionProvider`, `ValidationProvider`, `VisibilityProvider`. Peer dep on React 19. | Live |
-| `@json-ui/headless` | Framework-agnostic renderer that produces a `NormalizedNode` tree for the LLM Observer Layer. | Planned (see `docs/plans/2026-04-13-headless-renderer-plan.md`) |
+| Package             | Purpose                                                                                                                    | Status                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `@json-ui/core`     | Framework-agnostic Zod catalog, types, visibility, validation, actions. The only runtime dependency is `zod`.              | Live                                                            |
+| `@json-ui/react`    | React 19 renderer with `DataProvider`, `ActionProvider`, `ValidationProvider`, `VisibilityProvider`. Peer dep on React 19. | Live                                                            |
+| `@json-ui/headless` | Framework-agnostic renderer that produces a `NormalizedNode` tree for the LLM Observer Layer.                              | Planned (see `docs/plans/2026-04-13-headless-renderer-plan.md`) |
 
 Top-level scripts (run from the repo root):
+
 - `npm test` — vitest run across all packages (jsdom env, globals enabled)
 - `npm run typecheck` — `tsc --noEmit` across all workspaces
 - `npm run build` — `tsup` build for every package
@@ -44,6 +45,7 @@ The current `@json-ui/react` `DataProvider` ships these names. Any refactor must
 ### Observable stores (Plan 1, in flight)
 
 When implementing `StagingBuffer` and `ObservableDataModel`:
+
 - `snapshot()` MUST be identity-stable across calls with no intervening mutation, AND must return a NEW reference after any mutation. The cheapest correct implementation is `cachedSnapshot = structuredClone(root)` invalidated on `set`/`delete`/`reconcile`. A bare `cachedSnapshot = root` aliases the live mutable object and silently breaks React's `useSyncExternalStore` tearing protection — this bug was caught in the planning review.
 - Subscribers fire **synchronously** before `set`/`delete`/`reconcile` returns. Listener errors are swallowed via `console.error` per spec.
 - `validateJSONValue` rejects 22 disqualified values: `undefined`, `BigInt`, `Symbol`, function, `NaN`, `±Infinity`, `Date`, `RegExp`, `Error`, `Map`, `Set`, `WeakMap`, `WeakSet`, `Promise`, `ArrayBuffer`, `SharedArrayBuffer`, all typed arrays, `URL`, circular references, and any object whose prototype is neither `Object.prototype` nor `null`. Tests cover each in three positions (top-level, nested in object, nested in array).
@@ -64,6 +66,7 @@ Design + planning workflow uses two folders:
 - `docs/plans/YYYY-MM-DD-<topic>-plan.md` — the bite-sized implementation plan, written via the writing-plans skill, reviewed by an Opus + Sonnet team armed with the RLM skill, then run through HonestClaude before commit.
 
 Current plans (April 2026):
+
 1. `2026-04-13-core-runtime-types-plan.md` — Plan 1 (prerequisite). Adds `packages/core/src/runtime.ts`.
 2. `2026-04-13-react-external-data-store-plan.md` — Plan 2. Refactors `DataProvider` with split-component dispatcher.
 3. `2026-04-13-headless-renderer-plan.md` — Plan 3 (main deliverable). Builds `@json-ui/headless` from scratch.

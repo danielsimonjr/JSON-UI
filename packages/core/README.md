@@ -21,11 +21,11 @@ npm install @json-ui/core
 ### Create a Catalog
 
 ```typescript
-import { createCatalog } from '@json-ui/core';
-import { z } from 'zod';
+import { createCatalog } from "@json-ui/core";
+import { z } from "zod";
 
 const catalog = createCatalog({
-  name: 'My Dashboard',
+  name: "My Dashboard",
   components: {
     Card: {
       props: z.object({
@@ -33,25 +33,25 @@ const catalog = createCatalog({
         description: z.string().nullable(),
       }),
       hasChildren: true,
-      description: 'A card container',
+      description: "A card container",
     },
     Button: {
       props: z.object({
         label: z.string(),
         action: ActionSchema,
       }),
-      description: 'A clickable button',
+      description: "A clickable button",
     },
   },
   actions: {
-    submit: { description: 'Submit the form' },
-    export: { 
-      params: z.object({ format: z.enum(['csv', 'pdf']) }),
-      description: 'Export data',
+    submit: { description: "Submit the form" },
+    export: {
+      params: z.object({ format: z.enum(["csv", "pdf"]) }),
+      description: "Export data",
     },
   },
   functions: {
-    customValidation: (value) => typeof value === 'string' && value.length > 0,
+    customValidation: (value) => typeof value === "string" && value.length > 0,
   },
 });
 ```
@@ -59,34 +59,34 @@ const catalog = createCatalog({
 ### Visibility Conditions
 
 ```typescript
-import { visibility, evaluateVisibility } from '@json-ui/core';
+import { visibility, evaluateVisibility } from "@json-ui/core";
 
 // Simple path-based visibility
 const element1 = {
-  key: 'error-banner',
-  type: 'Alert',
-  props: { message: 'Error!' },
-  visible: { path: '/form/hasError' },
+  key: "error-banner",
+  type: "Alert",
+  props: { message: "Error!" },
+  visible: { path: "/form/hasError" },
 };
 
 // Auth-based visibility
 const element2 = {
-  key: 'admin-panel',
-  type: 'Card',
-  props: { title: 'Admin' },
-  visible: { auth: 'signedIn' },
+  key: "admin-panel",
+  type: "Card",
+  props: { title: "Admin" },
+  visible: { auth: "signedIn" },
 };
 
 // Complex logic
 const element3 = {
-  key: 'notification',
-  type: 'Alert',
-  props: { message: 'Warning' },
+  key: "notification",
+  type: "Alert",
+  props: { message: "Warning" },
   visible: {
     and: [
-      { path: '/settings/notifications' },
-      { not: { path: '/user/dismissed' } },
-      { gt: [{ path: '/items/count' }, 10] },
+      { path: "/settings/notifications" },
+      { not: { path: "/user/dismissed" } },
+      { gt: [{ path: "/items/count" }, 10] },
     ],
   },
 };
@@ -100,21 +100,21 @@ const isVisible = evaluateVisibility(element1.visible, {
 ### Rich Actions
 
 ```typescript
-import { resolveAction, executeAction } from '@json-ui/core';
+import { resolveAction, executeAction } from "@json-ui/core";
 
 const buttonAction = {
-  name: 'refund',
+  name: "refund",
   params: {
-    paymentId: { path: '/selected/id' },
+    paymentId: { path: "/selected/id" },
     amount: 100,
   },
   confirm: {
-    title: 'Confirm Refund',
-    message: 'Refund $100 to customer?',
-    variant: 'danger',
+    title: "Confirm Refund",
+    message: "Refund $100 to customer?",
+    variant: "danger",
   },
-  onSuccess: { navigate: '/payments' },
-  onError: { set: { '/ui/error': '$error.message' } },
+  onSuccess: { navigate: "/payments" },
+  onError: { set: { "/ui/error": "$error.message" } },
 };
 
 // Resolve dynamic values
@@ -124,19 +124,19 @@ const resolved = resolveAction(buttonAction, dataModel);
 ### Validation
 
 ```typescript
-import { runValidation, check } from '@json-ui/core';
+import { runValidation, check } from "@json-ui/core";
 
 const config = {
   checks: [
-    check.required('Email is required'),
-    check.email('Invalid email'),
-    check.maxLength(100, 'Too long'),
+    check.required("Email is required"),
+    check.email("Invalid email"),
+    check.maxLength(100, "Too long"),
   ],
-  validateOn: 'blur',
+  validateOn: "blur",
 };
 
 const result = runValidation(config, {
-  value: 'user@example.com',
+  value: "user@example.com",
   dataModel: {},
 });
 

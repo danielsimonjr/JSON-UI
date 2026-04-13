@@ -68,6 +68,7 @@ Expected: `OK - runtime.ts does not exist yet`. If it exists, you are not on a c
 **Goal:** Create `runtime.ts` with the foundational type aliases. No runtime code yet — just types that downstream tasks will reference.
 
 **Files:**
+
 - Create: `packages/core/src/runtime.ts`
 
 - [ ] **Step 1: Create `packages/core/src/runtime.ts` with the four pure types**
@@ -138,6 +139,7 @@ git commit -m "feat(core): add runtime.ts with FieldId, JSONValue, StagingSnapsh
 **Goal:** Add the error class and the structural-recursion validator that enforces JSONValue at runtime. Full TDD cycle for each disqualified-value class.
 
 **Files:**
+
 - Modify: `packages/core/src/runtime.ts`
 - Create: `packages/core/src/runtime-validation.test.ts`
 
@@ -258,7 +260,11 @@ export function validateJSONValue(
     if (!Number.isFinite(value)) {
       throw new InitialDataNotSerializableError(
         path,
-        Number.isNaN(value) ? "NaN" : value === Infinity ? "Infinity" : "-Infinity",
+        Number.isNaN(value)
+          ? "NaN"
+          : value === Infinity
+            ? "Infinity"
+            : "-Infinity",
       );
     }
     return;
@@ -286,19 +292,31 @@ export function validateJSONValue(
   visited.add(value as object);
 
   // Disqualified object types — checked before plain-object check
-  if (value instanceof Date) throw new InitialDataNotSerializableError(path, "Date");
-  if (value instanceof RegExp) throw new InitialDataNotSerializableError(path, "RegExp");
-  if (value instanceof Error) throw new InitialDataNotSerializableError(path, "Error");
-  if (value instanceof Map) throw new InitialDataNotSerializableError(path, "Map");
-  if (value instanceof Set) throw new InitialDataNotSerializableError(path, "Set");
-  if (value instanceof WeakMap) throw new InitialDataNotSerializableError(path, "WeakMap");
-  if (value instanceof WeakSet) throw new InitialDataNotSerializableError(path, "WeakSet");
-  if (value instanceof Promise) throw new InitialDataNotSerializableError(path, "Promise");
-  if (value instanceof ArrayBuffer) throw new InitialDataNotSerializableError(path, "ArrayBuffer");
+  if (value instanceof Date)
+    throw new InitialDataNotSerializableError(path, "Date");
+  if (value instanceof RegExp)
+    throw new InitialDataNotSerializableError(path, "RegExp");
+  if (value instanceof Error)
+    throw new InitialDataNotSerializableError(path, "Error");
+  if (value instanceof Map)
+    throw new InitialDataNotSerializableError(path, "Map");
+  if (value instanceof Set)
+    throw new InitialDataNotSerializableError(path, "Set");
+  if (value instanceof WeakMap)
+    throw new InitialDataNotSerializableError(path, "WeakMap");
+  if (value instanceof WeakSet)
+    throw new InitialDataNotSerializableError(path, "WeakSet");
+  if (value instanceof Promise)
+    throw new InitialDataNotSerializableError(path, "Promise");
+  if (value instanceof ArrayBuffer)
+    throw new InitialDataNotSerializableError(path, "ArrayBuffer");
   // SharedArrayBuffer is a separate global; instanceof ArrayBuffer returns false
   // in V8 even though the contract is similar. Check it explicitly. The
   // typeof check guards environments where SAB is not available.
-  if (typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer) {
+  if (
+    typeof SharedArrayBuffer !== "undefined" &&
+    value instanceof SharedArrayBuffer
+  ) {
     throw new InitialDataNotSerializableError(path, "SharedArrayBuffer");
   }
   if (ArrayBuffer.isView(value)) {
@@ -320,7 +338,10 @@ export function validateJSONValue(
   const proto = Object.getPrototypeOf(value);
   if (proto !== Object.prototype && proto !== null) {
     const constructorName = (value as object).constructor?.name ?? "object";
-    throw new InitialDataNotSerializableError(path, `${constructorName} (non-plain object)`);
+    throw new InitialDataNotSerializableError(
+      path,
+      `${constructorName} (non-plain object)`,
+    );
   }
 
   // Symbol keys disallowed
@@ -329,7 +350,11 @@ export function validateJSONValue(
   }
 
   for (const key of Object.keys(value as object)) {
-    validateJSONValue((value as Record<string, unknown>)[key], `${path}/${key}`, visited);
+    validateJSONValue(
+      (value as Record<string, unknown>)[key],
+      `${path}/${key}`,
+      visited,
+    );
   }
 }
 ```
@@ -359,11 +384,15 @@ describe("validateJSONValue - disqualified primitives", () => {
   ];
   for (const [name, value, expectedType] of cases) {
     test(`rejects ${name} at top level`, () => {
-      expect(() => validateJSONValue(value, "")).toThrow(InitialDataNotSerializableError);
+      expect(() => validateJSONValue(value, "")).toThrow(
+        InitialDataNotSerializableError,
+      );
       try {
         validateJSONValue(value, "");
       } catch (err) {
-        expect((err as InitialDataNotSerializableError).actualType).toBe(expectedType);
+        expect((err as InitialDataNotSerializableError).actualType).toBe(
+          expectedType,
+        );
       }
     });
   }
@@ -381,15 +410,25 @@ describe("validateJSONValue - disqualified objects", () => {
     ["ArrayBuffer", new ArrayBuffer(0), "ArrayBuffer"],
     ["Uint8Array", new Uint8Array(0), "Uint8Array"],
     ["Int32Array", new Int32Array(0), "Int32Array"],
-    ["custom class", new (class X { x = 1 })(), "X (non-plain object)"],
+    [
+      "custom class",
+      new (class X {
+        x = 1;
+      })(),
+      "X (non-plain object)",
+    ],
   ];
   for (const [name, value, expectedType] of cases) {
     test(`rejects ${name}`, () => {
-      expect(() => validateJSONValue(value, "")).toThrow(InitialDataNotSerializableError);
+      expect(() => validateJSONValue(value, "")).toThrow(
+        InitialDataNotSerializableError,
+      );
       try {
         validateJSONValue(value, "");
       } catch (err) {
-        expect((err as InitialDataNotSerializableError).actualType).toBe(expectedType);
+        expect((err as InitialDataNotSerializableError).actualType).toBe(
+          expectedType,
+        );
       }
     });
   }
@@ -423,7 +462,13 @@ describe("validateJSONValue - disqualified at depth — exhaustive 3-position ma
     ["Int32Array", () => new Int32Array(0)],
     ["Float64Array", () => new Float64Array(0)],
     ["URL", () => new URL("https://example.com")],
-    ["custom class", () => new (class X { x = 1 })()],
+    [
+      "custom class",
+      () =>
+        new (class X {
+          x = 1;
+        })(),
+    ],
   ];
 
   for (const [name, factory] of disqualified) {
@@ -459,11 +504,15 @@ describe("validateJSONValue - circular references", () => {
   test("rejects a self-referencing object", () => {
     const a: Record<string, unknown> = {};
     a.self = a;
-    expect(() => validateJSONValue(a, "")).toThrow(InitialDataNotSerializableError);
+    expect(() => validateJSONValue(a, "")).toThrow(
+      InitialDataNotSerializableError,
+    );
     try {
       validateJSONValue(a, "");
     } catch (err) {
-      expect((err as InitialDataNotSerializableError).actualType).toBe("<circular reference>");
+      expect((err as InitialDataNotSerializableError).actualType).toBe(
+        "<circular reference>",
+      );
     }
   });
 });
@@ -513,6 +562,7 @@ git commit -m "feat(core): add InitialDataNotSerializableError and validateJSONV
 **Goal:** Implement the observable staging buffer. Map-backed, cached snapshot, synchronous notification, idempotent subscribe.
 
 **Files:**
+
 - Modify: `packages/core/src/runtime.ts`
 - Create: `packages/core/src/runtime.test.ts`
 
@@ -739,7 +789,9 @@ describe("createStagingBuffer - subscribe", () => {
   test("subscriber fires synchronously inside set", () => {
     const buf = createStagingBuffer();
     let calls = 0;
-    buf.subscribe(() => { calls++; });
+    buf.subscribe(() => {
+      calls++;
+    });
     expect(calls).toBe(0);
     buf.set("x", 1);
     expect(calls).toBe(1); // synchronous: incremented before the next statement
@@ -748,7 +800,9 @@ describe("createStagingBuffer - subscribe", () => {
     const buf = createStagingBuffer();
     buf.set("x", 1);
     let calls = 0;
-    buf.subscribe(() => { calls++; });
+    buf.subscribe(() => {
+      calls++;
+    });
     buf.delete("x");
     expect(calls).toBe(1);
   });
@@ -756,14 +810,18 @@ describe("createStagingBuffer - subscribe", () => {
     const buf = createStagingBuffer();
     buf.set("x", 1);
     let calls = 0;
-    buf.subscribe(() => { calls++; });
+    buf.subscribe(() => {
+      calls++;
+    });
     buf.reconcile(new Set(["x"]));
     expect(calls).toBe(1);
   });
   test("subscriber fires on equal-value set (idempotent notification)", () => {
     const buf = createStagingBuffer();
     let calls = 0;
-    buf.subscribe(() => { calls++; });
+    buf.subscribe(() => {
+      calls++;
+    });
     buf.set("x", 1);
     buf.set("x", 1); // same value
     expect(calls).toBe(2);
@@ -771,7 +829,9 @@ describe("createStagingBuffer - subscribe", () => {
   test("registering the same callback twice creates two independent subscriptions", () => {
     const buf = createStagingBuffer();
     let calls = 0;
-    const cb = () => { calls++; };
+    const cb = () => {
+      calls++;
+    };
     buf.subscribe(cb);
     buf.subscribe(cb);
     buf.set("x", 1);
@@ -780,7 +840,9 @@ describe("createStagingBuffer - subscribe", () => {
   test("unsubscribe removes the subscription", () => {
     const buf = createStagingBuffer();
     let calls = 0;
-    const unsub = buf.subscribe(() => { calls++; });
+    const unsub = buf.subscribe(() => {
+      calls++;
+    });
     buf.set("x", 1);
     expect(calls).toBe(1);
     unsub();
@@ -790,7 +852,9 @@ describe("createStagingBuffer - subscribe", () => {
   test("double unsubscribe is a no-op", () => {
     const buf = createStagingBuffer();
     let calls = 0;
-    const unsub = buf.subscribe(() => { calls++; });
+    const unsub = buf.subscribe(() => {
+      calls++;
+    });
     unsub();
     expect(() => unsub()).not.toThrow();
     buf.set("x", 1);
@@ -800,8 +864,12 @@ describe("createStagingBuffer - subscribe", () => {
     const buf = createStagingBuffer();
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     let goodCalls = 0;
-    buf.subscribe(() => { throw new Error("boom"); });
-    buf.subscribe(() => { goodCalls++; });
+    buf.subscribe(() => {
+      throw new Error("boom");
+    });
+    buf.subscribe(() => {
+      goodCalls++;
+    });
     expect(() => buf.set("x", 1)).not.toThrow();
     expect(goodCalls).toBe(1);
     expect(errSpy).toHaveBeenCalled();
@@ -872,6 +940,7 @@ git commit -m "feat(core): add StagingBuffer interface and createStagingBuffer f
 **Goal:** Add the path-based observable data store with the same identity-stability and notification properties, plus initialData validation.
 
 **Files:**
+
 - Modify: `packages/core/src/runtime.ts`
 - Modify: `packages/core/src/runtime.test.ts`
 
@@ -949,12 +1018,19 @@ export interface ObservableDataModel {
 /**
  * Internal helper: get a value at a `/`-separated path from a nested object.
  */
-function getAtPath(root: Record<string, JSONValue>, path: string): JSONValue | undefined {
+function getAtPath(
+  root: Record<string, JSONValue>,
+  path: string,
+): JSONValue | undefined {
   if (path === "") return root;
   const parts = path.split("/").filter((p) => p.length > 0);
   let current: JSONValue | undefined = root;
   for (const part of parts) {
-    if (current === null || typeof current !== "object" || Array.isArray(current)) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      Array.isArray(current)
+    ) {
       return undefined;
     }
     current = (current as Record<string, JSONValue>)[part];
@@ -967,14 +1043,23 @@ function getAtPath(root: Record<string, JSONValue>, path: string): JSONValue | u
  * Internal helper: set a value at a `/`-separated path, creating intermediate
  * plain objects as needed. Mutates `root` in place.
  */
-function setAtPath(root: Record<string, JSONValue>, path: string, value: JSONValue): void {
+function setAtPath(
+  root: Record<string, JSONValue>,
+  path: string,
+  value: JSONValue,
+): void {
   const parts = path.split("/").filter((p) => p.length > 0);
   if (parts.length === 0) return;
   let current: Record<string, JSONValue> = root;
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i]!;
     const next = current[key];
-    if (next === undefined || next === null || typeof next !== "object" || Array.isArray(next)) {
+    if (
+      next === undefined ||
+      next === null ||
+      typeof next !== "object" ||
+      Array.isArray(next)
+    ) {
       const fresh: Record<string, JSONValue> = {};
       current[key] = fresh;
       current = fresh;
@@ -995,7 +1080,12 @@ function deleteAtPath(root: Record<string, JSONValue>, path: string): boolean {
   let current: Record<string, JSONValue> | undefined = root;
   for (let i = 0; i < parts.length - 1; i++) {
     const next = current?.[parts[i]!];
-    if (next === undefined || next === null || typeof next !== "object" || Array.isArray(next)) {
+    if (
+      next === undefined ||
+      next === null ||
+      typeof next !== "object" ||
+      Array.isArray(next)
+    ) {
       return false;
     }
     current = next as Record<string, JSONValue>;
@@ -1140,14 +1230,14 @@ Append:
 ```typescript
 describe("createObservableDataModel - initialData validation", () => {
   test("throws on Date in initialData", () => {
-    expect(() => createObservableDataModel({ when: new Date() } as never)).toThrow(
-      InitialDataNotSerializableError,
-    );
+    expect(() =>
+      createObservableDataModel({ when: new Date() } as never),
+    ).toThrow(InitialDataNotSerializableError);
   });
   test("throws on Map nested in initialData", () => {
-    expect(() => createObservableDataModel({ data: new Map() } as never)).toThrow(
-      InitialDataNotSerializableError,
-    );
+    expect(() =>
+      createObservableDataModel({ data: new Map() } as never),
+    ).toThrow(InitialDataNotSerializableError);
   });
   test("throws on function in initialData", () => {
     expect(() => createObservableDataModel({ fn: () => 0 } as never)).toThrow(
@@ -1207,21 +1297,27 @@ describe("createObservableDataModel - snapshot identity and notification", () =>
   test("subscriber fires synchronously inside set", () => {
     const m = createObservableDataModel();
     let calls = 0;
-    m.subscribe(() => { calls++; });
+    m.subscribe(() => {
+      calls++;
+    });
     m.set("x", 1);
     expect(calls).toBe(1);
   });
   test("subscriber fires synchronously inside delete", () => {
     const m = createObservableDataModel({ x: 1 });
     let calls = 0;
-    m.subscribe(() => { calls++; });
+    m.subscribe(() => {
+      calls++;
+    });
     m.delete("x");
     expect(calls).toBe(1);
   });
   test("unsubscribe stops notifications", () => {
     const m = createObservableDataModel();
     let calls = 0;
-    const unsub = m.subscribe(() => { calls++; });
+    const unsub = m.subscribe(() => {
+      calls++;
+    });
     m.set("x", 1);
     unsub();
     m.set("y", 2);
@@ -1252,6 +1348,7 @@ git commit -m "feat(core): add ObservableDataModel interface and createObservabl
 **Goal:** Re-export the new runtime types from core's public surface so consumers can `import { StagingBuffer, createStagingBuffer, ... } from "@json-ui/core"`.
 
 **Files:**
+
 - Modify: `packages/core/src/index.ts`
 
 - [ ] **Step 1: Read the current index.ts barrel**
@@ -1316,7 +1413,8 @@ import {
 const _b: StagingBuffer = createStagingBuffer();
 const _m: ObservableDataModel = createObservableDataModel();
 const _v: typeof validateJSONValue = validateJSONValue;
-const _e: typeof InitialDataNotSerializableError = InitialDataNotSerializableError;
+const _e: typeof InitialDataNotSerializableError =
+  InitialDataNotSerializableError;
 const _id: FieldId = "field-1";
 const _snap: StagingSnapshot = {};
 const _json: JSONValue = null;
@@ -1326,7 +1424,14 @@ const _evt: IntentEvent = {
   staging_snapshot: {},
   timestamp: 0,
 };
-void _b; void _m; void _v; void _e; void _id; void _snap; void _json; void _evt;
+void _b;
+void _m;
+void _v;
+void _e;
+void _id;
+void _snap;
+void _json;
+void _evt;
 ```
 
 ```bash
@@ -1399,7 +1504,13 @@ describe("runtime barrel — Invariant 15 (IntentEvent shape)", () => {
     // typecheck — that's the assertion. The runtime expect is a sanity check.
     const event: core.IntentEvent = {
       action_name: "submit",
-      action_params: { foo: "bar", n: 42, ok: true, list: [1, 2, 3], nested: { k: "v" } },
+      action_params: {
+        foo: "bar",
+        n: 42,
+        ok: true,
+        list: [1, 2, 3],
+        nested: { k: "v" },
+      },
       staging_snapshot: { email: "x@y.z", agree: true },
       catalog_version: "v1.2.3",
       timestamp: Date.now(),
@@ -1495,6 +1606,7 @@ Expected: clean working tree. If clean, no commit needed.
 **Spec coverage:** The spec defines `FieldId` (Task 2), `JSONValue` (Task 2), `StagingSnapshot` (Task 2), `IntentEvent` (Task 2), `InitialDataNotSerializableError` (Task 3), `validateJSONValue` (Task 3), `StagingBuffer` interface and `createStagingBuffer` factory (Task 4), `ObservableDataModel` interface and `createObservableDataModel` factory (Task 5), and core barrel exports (Task 6). Every spec deliverable maps to a task.
 
 **Spec testable invariants coverage:**
+
 - Invariant 1 (identity-stable snapshots) → Task 4 Step 7, Task 5 Step 9
 - Invariant 2 (snapshot invalidates on set) → Task 4 Step 7, Task 5 Step 9
 - Invariant 3 (snapshot invalidates on delete) → Task 4 Step 7

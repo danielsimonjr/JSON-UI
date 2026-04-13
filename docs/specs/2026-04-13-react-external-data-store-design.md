@@ -56,6 +56,7 @@ The fix is to add a parallel code path that uses `useSyncExternalStore(store.sub
 **File modified:** `packages/react/src/contexts/data.tsx`
 
 **Files NOT modified:**
+
 - `packages/react/src/contexts/actions.tsx` — no data-store dependency
 - `packages/react/src/contexts/validation.tsx` — holds its own `fieldStates` via `useState`, unrelated
 - `packages/react/src/contexts/visibility.tsx` — reads from `DataContext`, unaffected
@@ -217,7 +218,7 @@ Key implementation notes:
   - (c) Use a key-based remount trick: `<InternalDataProvider key="internal">` vs `<ExternalDataProvider key="external">`. Works but requires unmount/remount on store toggle. Consistent with the "don't swap stores mid-lifetime" warning in the prop doc.
 - **Split-component approach committed:** `DataProvider` becomes a thin dispatcher. Two internal components, `InternalDataProvider` (the current `useState` logic) and `ExternalDataProvider` (the `useSyncExternalStore` logic), each call their own hooks without branching. This respects the rules of hooks and keeps the two code paths independent.
 - **`data` shape in external mode:** `ObservableDataModel.snapshot()` returns `Readonly<Record<string, JSONValue>>`, which is compatible with `DataModel = Record<string, unknown>` (JSONValue is narrower than unknown). Consumers reading `data` via `useData` get the same shape in both modes.
-- **`onDataChange` behavior:** fires with `(path, newValue, prevValue)` in both modes. In external mode, `prevValue` is read via `store.get(path)` *before* the `store.set` call so the value captured is the old one.
+- **`onDataChange` behavior:** fires with `(path, newValue, prevValue)` in both modes. In external mode, `prevValue` is read via `store.get(path)` _before_ the `store.set` call so the value captured is the old one.
 - **No atomic batching in `update`:** each `store.set` fires a `subscribe` callback, so a multi-key `update` triggers multiple re-renders. This matches the current `useState` mode's behavior (a single `setState` re-render per `update` call is actually BETTER than external mode). A future enhancement could add a batch method to `ObservableDataModel`; not in scope here.
 
 ## Corrected Component Structure
@@ -308,7 +309,7 @@ Test categories:
 
 1. **Should `initialData` silently override or throw when `store` is also provided?** Currently committed to silent ignore with documentation. Alternative: throw at mount time with a clear error message. Throwing is louder and harder to miss; silent ignore is friendlier to consumers migrating from internal to external mode. Leaning **silent ignore** because migration-friendliness matters more than loudness here, and the documentation explicitly calls it out.
 
-2. **What happens if the `store` reference changes across renders (same `DataProvider` instance, different store prop)?** The split-component approach forces a remount because the rendered child type changes. Within a single child component instance, the `store` reference is captured by `useCallback` / `useSyncExternalStore` closures. React's `useSyncExternalStore` does *not* resubscribe automatically when `subscribe` changes identity unless the caller explicitly handles it. **Committed to:** the prop docs explicitly say store-swapping mid-lifetime is unsupported; remount is the consumer's workaround.
+2. **What happens if the `store` reference changes across renders (same `DataProvider` instance, different store prop)?** The split-component approach forces a remount because the rendered child type changes. Within a single child component instance, the `store` reference is captured by `useCallback` / `useSyncExternalStore` closures. React's `useSyncExternalStore` does _not_ resubscribe automatically when `subscribe` changes identity unless the caller explicitly handles it. **Committed to:** the prop docs explicitly say store-swapping mid-lifetime is unsupported; remount is the consumer's workaround.
 
 3. **Should `DataProvider` expose a way to inspect whether it's in external mode?** A consumer writing a test that wants to assert "yes, the provider is using my external store" currently has no visibility — the context value shape is the same in both modes. Options: (a) add a `mode: "internal" | "external"` field to the context value (API surface growth), (b) add a dedicated `useDataMode()` hook (API surface growth), (c) require consumers to hold the store reference externally and trust their own usage. **Leaning** option (c) — consumers who passed the store already have the reference; they don't need the provider to tell them about their own decision.
 

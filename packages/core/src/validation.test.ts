@@ -64,7 +64,9 @@ describe("builtInValidationFunctions", () => {
     });
 
     it("fails for non-strings", () => {
-      expect(builtInValidationFunctions.minLength!(123, { min: 1 })).toBe(false);
+      expect(builtInValidationFunctions.minLength!(123, { min: 1 })).toBe(
+        false,
+      );
     });
 
     it("fails when min is not provided", () => {
@@ -74,7 +76,9 @@ describe("builtInValidationFunctions", () => {
 
   describe("maxLength", () => {
     it("passes when string meets maximum length", () => {
-      expect(builtInValidationFunctions.maxLength!("hi", { max: 5 })).toBe(true);
+      expect(builtInValidationFunctions.maxLength!("hi", { max: 5 })).toBe(
+        true,
+      );
       expect(builtInValidationFunctions.maxLength!("hello", { max: 5 })).toBe(
         true,
       );

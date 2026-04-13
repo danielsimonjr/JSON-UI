@@ -21,7 +21,7 @@ npm install @json-ui/react @json-ui/core
 ### Basic Setup
 
 ```tsx
-import { JSONUIProvider, Renderer, useUIStream } from '@json-ui/react';
+import { JSONUIProvider, Renderer, useUIStream } from "@json-ui/react";
 
 // Define your component registry
 const registry = {
@@ -50,19 +50,19 @@ const actionHandlers = {
 
 function App() {
   const { tree, isStreaming, send, clear } = useUIStream({
-    api: '/api/generate',
+    api: "/api/generate",
   });
 
   return (
     <JSONUIProvider
       registry={registry}
-      initialData={{ user: { name: 'John' } }}
+      initialData={{ user: { name: "John" } }}
       authState={{ isSignedIn: true }}
       actionHandlers={actionHandlers}
     >
       <input
         placeholder="Describe the UI..."
-        onKeyDown={(e) => e.key === 'Enter' && send(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && send(e.target.value)}
       />
       <Renderer tree={tree} registry={registry} loading={isStreaming} />
     </JSONUIProvider>
@@ -82,36 +82,33 @@ import {
   useVisibility,
   useActions,
   useFieldValidation,
-} from '@json-ui/react';
+} from "@json-ui/react";
 
 // Data context
 function MyComponent() {
   const { data, get, set } = useData();
-  const value = get('/user/name');
-  
+  const value = get("/user/name");
+
   return (
-    <input
-      value={value}
-      onChange={(e) => set('/user/name', e.target.value)}
-    />
+    <input value={value} onChange={(e) => set("/user/name", e.target.value)} />
   );
 }
 
 // Visibility context
 function ConditionalComponent({ visible }) {
   const { isVisible } = useVisibility();
-  
+
   if (!isVisible(visible)) {
     return null;
   }
-  
+
   return <div>Visible content</div>;
 }
 
 // Action context
 function ActionButton({ action }) {
   const { execute, loadingActions } = useActions();
-  
+
   return (
     <button
       onClick={() => execute(action)}
@@ -126,15 +123,20 @@ function ActionButton({ action }) {
 function ValidatedInput({ path, checks }) {
   const { errors, validate, touch } = useFieldValidation(path, { checks });
   const [value, setValue] = useDataBinding(path);
-  
+
   return (
     <div>
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={() => { touch(); validate(); }}
+        onBlur={() => {
+          touch();
+          validate();
+        }}
       />
-      {errors.map((err) => <span key={err}>{err}</span>)}
+      {errors.map((err) => (
+        <span key={err}>{err}</span>
+      ))}
     </div>
   );
 }
@@ -143,26 +145,24 @@ function ValidatedInput({ path, checks }) {
 ### Streaming UI
 
 ```tsx
-import { useUIStream } from '@json-ui/react';
+import { useUIStream } from "@json-ui/react";
 
 function StreamingDemo() {
   const {
-    tree,        // Current UI tree
+    tree, // Current UI tree
     isStreaming, // Whether currently streaming
-    error,       // Error if any
-    send,        // Send a prompt
-    clear,       // Clear the tree
+    error, // Error if any
+    send, // Send a prompt
+    clear, // Clear the tree
   } = useUIStream({
-    api: '/api/generate',
-    onComplete: (tree) => console.log('Done:', tree),
-    onError: (err) => console.error('Error:', err),
+    api: "/api/generate",
+    onComplete: (tree) => console.log("Done:", tree),
+    onError: (err) => console.error("Error:", err),
   });
 
   return (
     <div>
-      <button onClick={() => send('Create a dashboard')}>
-        Generate
-      </button>
+      <button onClick={() => send("Create a dashboard")}>Generate</button>
       {isStreaming && <span>Generating...</span>}
       {tree && <Renderer tree={tree} registry={registry} />}
     </div>
@@ -208,10 +208,10 @@ Components in your registry receive these props:
 
 ```typescript
 interface ComponentRenderProps<P = Record<string, unknown>> {
-  element: UIElement<string, P>;  // The element definition
-  children?: ReactNode;           // Rendered children
-  onAction?: (action: Action) => void;  // Action callback
-  loading?: boolean;              // Streaming in progress
+  element: UIElement<string, P>; // The element definition
+  children?: ReactNode; // Rendered children
+  onAction?: (action: Action) => void; // Action callback
+  loading?: boolean; // Streaming in progress
 }
 ```
 
@@ -221,11 +221,15 @@ interface ComponentRenderProps<P = Record<string, unknown>> {
 function MetricComponent({ element }: ComponentRenderProps) {
   const { label, valuePath, format } = element.props;
   const value = useDataValue(valuePath);
-  
-  const formatted = format === 'currency'
-    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
-    : String(value);
-  
+
+  const formatted =
+    format === "currency"
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(value)
+      : String(value);
+
   return (
     <div className="metric">
       <span className="label">{label}</span>

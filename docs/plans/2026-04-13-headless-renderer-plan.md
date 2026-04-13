@@ -118,6 +118,7 @@ Expected: clean working tree on the same branch as Plans 1 and 2. Do not begin T
 **Goal:** Create the package directory, configuration files, and an empty source tree. After this task `npm install` runs cleanly and `npm run typecheck --workspace @json-ui/headless` passes against the empty barrel.
 
 **Files:**
+
 - Create: `packages/headless/package.json`
 - Create: `packages/headless/tsconfig.json`
 - Create: `packages/headless/tsup.config.ts`
@@ -154,9 +155,7 @@ Create `packages/headless/package.json`:
       "require": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -303,6 +302,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless && git c
 **Goal:** Define `NormalizedNode`, `NormalizedAction`, `NormalizedValidation`, `RenderPhase`, `RenderPassId`, and `SessionStateSnapshot`. Pure types, no runtime code, no tests of their own.
 
 **Files:**
+
 - Create: `packages/headless/src/types.ts`
 
 - [ ] **Step 1: Write the types module**
@@ -310,10 +310,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless && git c
 Create `packages/headless/src/types.ts`:
 
 ```typescript
-import type {
-  JSONValue,
-  StagingSnapshot,
-} from "@json-ui/core";
+import type { JSONValue, StagingSnapshot } from "@json-ui/core";
 
 /** A rendered element node. Fully resolved — no DynamicValues, no unevaluated visibility. */
 export interface NormalizedNode {
@@ -404,6 +401,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/type
 **Goal:** Define `SerializableError`, the typed error classes (`UnknownComponentError`, `MissingChildError`, `OptionConflictError`, `SessionDestroyedError`, `RenderError`, `DispatchError`), and the `toSerializableError` helper with cause-chain walking and depth limiting.
 
 **Files:**
+
 - Create: `packages/headless/src/errors.ts`
 - Create: `packages/headless/src/errors.test.ts`
 
@@ -570,11 +568,23 @@ export interface SerializableError {
 
 const MAX_CAUSE_DEPTH = 8;
 
-function isErrorLike(v: unknown): v is { name?: unknown; message: unknown; stack?: unknown; cause?: unknown } {
-  return typeof v === "object" && v !== null && "message" in v && typeof (v as { message: unknown }).message === "string";
+function isErrorLike(
+  v: unknown,
+): v is { name?: unknown; message: unknown; stack?: unknown; cause?: unknown } {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "message" in v &&
+    typeof (v as { message: unknown }).message === "string"
+  );
 }
 
-function coerceUnknown(value: unknown): { name: string; message: string; stack?: string; cause?: unknown } {
+function coerceUnknown(value: unknown): {
+  name: string;
+  message: string;
+  stack?: string;
+  cause?: unknown;
+} {
   if (value instanceof Error) {
     return {
       name: value.name || "Error",
@@ -597,7 +607,10 @@ function coerceUnknown(value: unknown): { name: string; message: string; stack?:
   };
 }
 
-function walkCause(value: unknown, depth: number): Omit<SerializableError, "phase"> | undefined {
+function walkCause(
+  value: unknown,
+  depth: number,
+): Omit<SerializableError, "phase"> | undefined {
   if (value === undefined || value === null) return undefined;
   if (depth >= MAX_CAUSE_DEPTH) {
     return {
@@ -621,7 +634,10 @@ function walkCause(value: unknown, depth: number): Omit<SerializableError, "phas
  * to MAX_CAUSE_DEPTH (8) levels and coerces non-Error throwables to
  * `{name: "UnknownError", message: String(value)}`.
  */
-export function toSerializableError(error: unknown, phase: RenderPhase): SerializableError {
+export function toSerializableError(
+  error: unknown,
+  phase: RenderPhase,
+): SerializableError {
   const c = coerceUnknown(error);
   const out: SerializableError = {
     name: c.name,
@@ -641,7 +657,9 @@ export class UnknownComponentError extends Error {
     public readonly elementType: string,
     public readonly elementKey: string,
   ) {
-    super(`No component registered for type "${elementType}" (element key "${elementKey}")`);
+    super(
+      `No component registered for type "${elementType}" (element key "${elementKey}")`,
+    );
   }
 }
 
@@ -652,7 +670,9 @@ export class MissingChildError extends Error {
     public readonly missingKey: string,
     public readonly parentKey: string,
   ) {
-    super(`Missing child key "${missingKey}" referenced by parent "${parentKey}"`);
+    super(
+      `Missing child key "${missingKey}" referenced by parent "${parentKey}"`,
+    );
   }
 }
 
@@ -694,6 +714,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/erro
 **Goal:** Define the seven `RenderHooks` event payloads, a no-op default implementation, and a `composeHooks` helper that merges multiple partials. The hooks file has zero runtime cost when no consumer installs anything.
 
 **Files:**
+
 - Create: `packages/headless/src/hooks.ts`
 - Create: `packages/headless/src/hooks.test.ts`
 
@@ -728,10 +749,7 @@ describe("composeHooks", () => {
   it("calls every partial in order on every hook field", () => {
     const a = vi.fn();
     const b = vi.fn();
-    const merged = composeHooks(
-      { onBeforeRender: a },
-      { onBeforeRender: b },
-    );
+    const merged = composeHooks({ onBeforeRender: a }, { onBeforeRender: b });
     merged.onBeforeRender({
       passId: 1,
       tree: { root: "r", elements: {} },
@@ -777,7 +795,9 @@ describe("composeHooks", () => {
       throw new Error("a-blew-up");
     });
     const b = vi.fn();
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const merged = composeHooks({ onBeforeRender: a }, { onBeforeRender: b });
     merged.onBeforeRender({
       passId: 1,
@@ -901,7 +921,9 @@ type HookField = (typeof HOOK_FIELDS)[number];
  * partial set for in-process debugging and another for the transaction-log
  * feed, and both fire for every event.
  */
-export function composeHooks(...partials: Array<Partial<RenderHooks>>): RenderHooks {
+export function composeHooks(
+  ...partials: Array<Partial<RenderHooks>>
+): RenderHooks {
   const merged: RenderHooks = { ...noopHooks };
   for (const field of HOOK_FIELDS) {
     const handlers: Array<(arg: never) => void> = [];
@@ -952,6 +974,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/hook
 **Goal:** Define `ReadonlyStagingView`, `ReadonlyDataView`, the `HeadlessContext` interface, and a `createHeadlessContext` factory that wraps the session's stores into read-only views and wires the resolver helpers into core's existing `evaluateVisibility`, `runValidation`, `resolveDynamicValue`, and `resolveAction` functions.
 
 **Files:**
+
 - Create: `packages/headless/src/context.ts`
 - Create: `packages/headless/src/context.test.ts`
 
@@ -1130,10 +1153,7 @@ import {
   type ValidationFunction,
   type VisibilityCondition,
 } from "@json-ui/core";
-import type {
-  NormalizedAction,
-  NormalizedValidation,
-} from "./types";
+import type { NormalizedAction, NormalizedValidation } from "./types";
 
 /** Read-only view of a StagingBuffer exposed during render. No set/delete/subscribe. */
 export interface ReadonlyStagingView {
@@ -1159,7 +1179,10 @@ export interface HeadlessContext {
   /** Evaluate a visibility condition against the bound views and (optional) auth state. */
   evaluateVisibility(condition: VisibilityCondition | undefined): boolean;
   /** Run validation against an input value, using the bound data view. */
-  runValidation(config: ValidationConfig, value: JSONValue): NormalizedValidation;
+  runValidation(
+    config: ValidationConfig,
+    value: JSONValue,
+  ): NormalizedValidation;
   /** Convert a catalog Action to a NormalizedAction (resolves DynamicValues). */
   resolveAction(action: Action): NormalizedAction;
 }
@@ -1210,7 +1233,9 @@ function makeDataView(data: ObservableDataModel): ReadonlyDataView {
   };
 }
 
-export function createHeadlessContext(input: CreateHeadlessContextInput): HeadlessContext {
+export function createHeadlessContext(
+  input: CreateHeadlessContextInput,
+): HeadlessContext {
   const stagingView = makeStagingView(input.staging);
   const dataView = makeDataView(input.data);
 
@@ -1324,6 +1349,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/cont
 **Goal:** Define the `HeadlessComponent` and `HeadlessRegistry` types, then implement the `walkTree` function that traverses a flat `UITree`, prunes by visibility, handles missing children, looks up components in the registry, and produces a `NormalizedNode` tree. The walker also fires `onElementRender` for each visible element.
 
 **Files:**
+
 - Create: `packages/headless/src/registry.ts`
 - Create: `packages/headless/src/walker.ts`
 - Create: `packages/headless/src/walker.test.ts`
@@ -1358,7 +1384,11 @@ Create `packages/headless/src/walker.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from "vitest";
-import { createObservableDataModel, createStagingBuffer, type UITree } from "@json-ui/core";
+import {
+  createObservableDataModel,
+  createStagingBuffer,
+  type UITree,
+} from "@json-ui/core";
 import { walkTree } from "./walker";
 import { createHeadlessContext } from "./context";
 import { type HeadlessRegistry } from "./registry";
@@ -1414,7 +1444,12 @@ describe("walkTree", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "b", "c"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "b", "c"],
+        },
         a: { key: "a", type: "Text", props: { content: "A" } },
         b: { key: "b", type: "Text", props: { content: "B" } },
         c: { key: "c", type: "Text", props: { content: "C" } },
@@ -1427,14 +1462,21 @@ describe("walkTree", () => {
       hooks: noopHooks,
       passId: 1,
     });
-    expect(result.children.map((n) => (n.props as { content?: string }).content)).toEqual(["A", "B", "C"]);
+    expect(
+      result.children.map((n) => (n.props as { content?: string }).content),
+    ).toEqual(["A", "B", "C"]);
   });
 
   it("prunes invisible elements (visible: false flag) from the parent's children array", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "b"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "b"],
+        },
         a: { key: "a", type: "Text", props: { content: "A" }, visible: false },
         b: { key: "b", type: "Text", props: { content: "B" } },
       },
@@ -1455,7 +1497,12 @@ describe("walkTree", () => {
       root: "root",
       elements: {
         root: { key: "root", type: "Container", props: {}, children: ["a"] },
-        a: { key: "a", type: "Text", props: { content: "secret" }, visible: { path: "showSecret" } },
+        a: {
+          key: "a",
+          type: "Text",
+          props: { content: "secret" },
+          visible: { path: "showSecret" },
+        },
       },
     };
     const ctx = makeCtx({ showSecret: false });
@@ -1473,7 +1520,12 @@ describe("walkTree", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "ghost", "b"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "ghost", "b"],
+        },
         a: { key: "a", type: "Text", props: { content: "A" } },
         b: { key: "b", type: "Text", props: { content: "B" } },
       },
@@ -1488,7 +1540,11 @@ describe("walkTree", () => {
     });
     expect(result.children.map((n) => n.key)).toEqual(["a", "b"]);
     expect(onError).toHaveBeenCalledTimes(1);
-    const call = onError.mock.calls[0]?.[0] as { name: string; phase: string; message: string };
+    const call = onError.mock.calls[0]?.[0] as {
+      name: string;
+      phase: string;
+      message: string;
+    };
     expect(call.name).toBe("MissingChildError");
     expect(call.phase).toBe("walk");
     expect(call.message).toContain("ghost");
@@ -1513,7 +1569,9 @@ describe("walkTree", () => {
     expect(result.children).toHaveLength(1);
     const fallback = result.children[0];
     expect(fallback?.type).toBe("Unknown");
-    expect((fallback?.props as { _originalType?: string })._originalType).toBe("Mystery");
+    expect((fallback?.props as { _originalType?: string })._originalType).toBe(
+      "Mystery",
+    );
     expect(onError).toHaveBeenCalledTimes(1);
     const call = onError.mock.calls[0]?.[0] as { name: string; phase: string };
     expect(call.name).toBe("UnknownComponentError");
@@ -1524,7 +1582,12 @@ describe("walkTree", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "b"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "b"],
+        },
         a: { key: "a", type: "Text", props: { content: "A" } },
         b: { key: "b", type: "Text", props: { content: "B" } },
       },
@@ -1536,7 +1599,8 @@ describe("walkTree", () => {
       ctx: makeCtx(),
       hooks: {
         ...noopHooks,
-        onElementRender: (e) => events.push({ key: e.elementKey, type: e.elementType }),
+        onElementRender: (e) =>
+          events.push({ key: e.elementKey, type: e.elementType }),
       },
       passId: 1,
     });
@@ -1561,7 +1625,11 @@ Create `packages/headless/src/walker.ts`:
 
 ```typescript
 import type { UIElement, UITree } from "@json-ui/core";
-import { MissingChildError, UnknownComponentError, toSerializableError } from "./errors";
+import {
+  MissingChildError,
+  UnknownComponentError,
+  toSerializableError,
+} from "./errors";
 import type { HeadlessContext } from "./context";
 import type { HeadlessRegistry } from "./registry";
 import type { NormalizedNode, RenderPassId } from "./types";
@@ -1589,7 +1657,10 @@ interface WalkInput {
 export function walkTree(input: WalkInput): NormalizedNode {
   const { tree, registry, ctx, hooks, passId } = input;
 
-  const walk = (elementKey: string, parentKey: string | null): NormalizedNode | undefined => {
+  const walk = (
+    elementKey: string,
+    parentKey: string | null,
+  ): NormalizedNode | undefined => {
     const element = tree.elements[elementKey];
     if (element === undefined) {
       // Should only fire when the ROOT key is missing, since walkChildren
@@ -1694,6 +1765,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/regi
 **Goal:** Implement a small helper that walks a `UITree` and collects every `FieldId` found in component props. Used by the renderer to build the `liveIds` set that `StagingBuffer.reconcile` consumes.
 
 **Files:**
+
 - Create: `packages/headless/src/helpers/collect-ids.ts`
 - Create: `packages/headless/src/helpers/collect-ids.test.ts`
 
@@ -1721,7 +1793,11 @@ describe("collectFieldIds", () => {
     const tree: UITree = {
       root: "r",
       elements: {
-        r: { key: "r", type: "TextField", props: { id: "email", label: "Email" } },
+        r: {
+          key: "r",
+          type: "TextField",
+          props: { id: "email", label: "Email" },
+        },
       },
     };
     expect(collectFieldIds(tree)).toEqual(new Set(["email"]));
@@ -1731,7 +1807,12 @@ describe("collectFieldIds", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "b"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "b"],
+        },
         a: { key: "a", type: "TextField", props: { id: "name" } },
         b: { key: "b", type: "Container", props: {}, children: ["c"] },
         c: { key: "c", type: "TextField", props: { id: "address" } },
@@ -1754,7 +1835,12 @@ describe("collectFieldIds", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Container", props: {}, children: ["a", "b"] },
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["a", "b"],
+        },
         a: { key: "a", type: "TextField", props: { id: "shared" } },
         b: { key: "b", type: "TextField", props: { id: "shared" } },
       },
@@ -1820,6 +1906,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/help
 **Goal:** The session factory wires together everything else. It owns the staging buffer, data model, hooks, registry, and catalog references; exposes `render`, `dispatch`, `setStagingField`, `setData`, `getStaging`, `getData`, and `destroy`; emits all the lifecycle hooks; and enforces `OptionConflictError` and `SessionDestroyedError` semantics.
 
 **Files:**
+
 - Create: `packages/headless/src/renderer.ts`
 - Create: `packages/headless/src/renderer.test.ts`
 
@@ -1931,7 +2018,9 @@ describe("createHeadlessRenderer", () => {
     });
     const tree: UITree = {
       root: "r",
-      elements: { r: { key: "r", type: "TextField", props: { id: "v", label: "X" } } },
+      elements: {
+        r: { key: "r", type: "TextField", props: { id: "v", label: "X" } },
+      },
     };
     const passA = session.render(tree);
     staging.set("v", "second");
@@ -2014,7 +2103,11 @@ describe("createHeadlessRenderer", () => {
     session.setData("user/name", "Bob");
     expect(session.getData()).toEqual({ user: { name: "Bob" } });
     expect(onDataChange).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "user/name", newValue: "Bob", oldValue: undefined }),
+      expect.objectContaining({
+        path: "user/name",
+        newValue: "Bob",
+        oldValue: undefined,
+      }),
     );
   });
 
@@ -2109,7 +2202,13 @@ describe("createHeadlessRenderer", () => {
     });
     const tree: UITree = {
       root: "r",
-      elements: { r: { key: "r", type: "TextField", props: { id: "name", label: "Name" } } },
+      elements: {
+        r: {
+          key: "r",
+          type: "TextField",
+          props: { id: "name", label: "Name" },
+        },
+      },
     };
     let out = session.render(tree);
     expect(out.props.value).toBe("");
@@ -2123,7 +2222,12 @@ describe("createHeadlessRenderer", () => {
     const tree: UITree = {
       root: "root",
       elements: {
-        root: { key: "root", type: "Text", props: { content: "ok" }, children: ["ghost"] },
+        root: {
+          key: "root",
+          type: "Text",
+          props: { content: "ok" },
+          children: ["ghost"],
+        },
       },
     };
     const onError = vi.fn();
@@ -2199,7 +2303,9 @@ export interface HeadlessRenderer {
   destroy(): void;
 }
 
-export function createHeadlessRenderer(options: HeadlessRendererOptions): HeadlessRenderer {
+export function createHeadlessRenderer(
+  options: HeadlessRendererOptions,
+): HeadlessRenderer {
   if (options.data !== undefined && options.initialData !== undefined) {
     throw new OptionConflictError(["data", "initialData"]);
   }
@@ -2329,6 +2435,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && npm test -- packages/headless/src/
 ```
 
 Expected: every test PASSES. Common failure modes:
+
 - If the `passId increments` test reports the wrong sequence, verify `nextPassId++` (post-increment) is used so the first call gets `passId === 1`.
 - If `setStagingField` notifies the test's `onStagingChange` more than once, verify the buffer's own subscriber list does not also have `hooks.onStagingChange` registered — the renderer should call `hooks.onStagingChange` directly, NOT subscribe to the buffer.
 - If `OptionConflictError` is reported as not thrown, verify the conflict check is the very first statement of `createHeadlessRenderer`.
@@ -2346,6 +2453,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/rend
 **Goal:** Implement `JsonSerializer` — a trivial pass-through that returns the `NormalizedNode` as-is, plus a `JsonStringSerializer` that returns `JSON.stringify`'d output.
 
 **Files:**
+
 - Create: `packages/headless/src/serializers/types.ts` (new — contains the `Serializer` interface)
 - Create: `packages/headless/src/serializers/index.ts` (barrel only — no interface declaration here)
 - Create: `packages/headless/src/serializers/json.ts`
@@ -2472,6 +2580,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/seri
 **Goal:** Implement `createHtmlSerializer({emitters, fallback?, escapeText?})` — accepts a per-component-type emitter map and walks the tree, calling each emitter to produce HTML fragments.
 
 **Files:**
+
 - Create: `packages/headless/src/serializers/html.ts`
 - Create: `packages/headless/src/serializers/html.test.ts`
 
@@ -2488,7 +2597,8 @@ describe("createHtmlSerializer", () => {
   it("calls the per-type emitter for a single node", () => {
     const ser = createHtmlSerializer({
       emitters: {
-        Text: (node) => `<span>${(node.props as { content: string }).content}</span>`,
+        Text: (node) =>
+          `<span>${(node.props as { content: string }).content}</span>`,
       },
     });
     const node: NormalizedNode = {
@@ -2504,7 +2614,8 @@ describe("createHtmlSerializer", () => {
     const ser = createHtmlSerializer({
       emitters: {
         Container: (_, emitChildren) => `<div>${emitChildren()}</div>`,
-        Text: (node) => `<span>${(node.props as { content: string }).content}</span>`,
+        Text: (node) =>
+          `<span>${(node.props as { content: string }).content}</span>`,
       },
     });
     const node: NormalizedNode = {
@@ -2680,6 +2791,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/seri
 **Goal:** Wire every public type and function into `src/index.ts`, write an end-to-end integration test that exercises a realistic NC-style flow (catalog + tree + dispatch + IntentEvent + serializer round-trip + hook serializability check), then run typecheck + test + build across all workspaces.
 
 **Files:**
+
 - Modify: `packages/headless/src/index.ts`
 - Create: `packages/headless/src/integration.test.ts`
 
@@ -2711,11 +2823,7 @@ export {
 } from "./errors";
 
 // Hooks
-export {
-  noopHooks,
-  composeHooks,
-  type RenderHooks,
-} from "./hooks";
+export { noopHooks, composeHooks, type RenderHooks } from "./hooks";
 
 // Context
 export {
@@ -2726,10 +2834,7 @@ export {
 } from "./context";
 
 // Registry
-export type {
-  HeadlessComponent,
-  HeadlessRegistry,
-} from "./registry";
+export type { HeadlessComponent, HeadlessRegistry } from "./registry";
 
 // Walker (exposed for advanced consumers; most use createHeadlessRenderer)
 export { walkTree } from "./walker";
@@ -2848,9 +2953,22 @@ const registry: HeadlessRegistry = {
 const formTree: UITree = {
   root: "form",
   elements: {
-    form: { key: "form", type: "Container", props: {}, children: ["email", "agree", "submit"] },
-    email: { key: "email", type: "TextField", props: { id: "email", label: "Email" } },
-    agree: { key: "agree", type: "Checkbox", props: { id: "agree", label: "I agree" } },
+    form: {
+      key: "form",
+      type: "Container",
+      props: {},
+      children: ["email", "agree", "submit"],
+    },
+    email: {
+      key: "email",
+      type: "TextField",
+      props: { id: "email", label: "Email" },
+    },
+    agree: {
+      key: "agree",
+      type: "Checkbox",
+      props: { id: "agree", label: "I agree" },
+    },
     submit: { key: "submit", type: "Button", props: { label: "Submit" } },
   },
 };
@@ -2906,7 +3024,10 @@ describe("integration: dual-backend friendly headless session", () => {
     });
     const round = JSON.parse(json);
     expect(round.props.action_name).toBe("submit_form");
-    expect(round.props.staging_snapshot).toEqual({ email: "x@y.z", agree: true });
+    expect(round.props.staging_snapshot).toEqual({
+      email: "x@y.z",
+      agree: true,
+    });
   });
 
   it("HTML serializer renders the rendered tree with a per-type emitter map", () => {
@@ -2922,11 +3043,19 @@ describe("integration: dual-backend friendly headless session", () => {
       emitters: {
         Container: (_, emit) => `<form>${emit()}</form>`,
         TextField: (node, _emit, escape) => {
-          const props = node.props as { id: string; label: string; value: string };
+          const props = node.props as {
+            id: string;
+            label: string;
+            value: string;
+          };
           return `<label>${escape(props.label)}<input name="${escape(props.id)}" value="${escape(props.value)}"/></label>`;
         },
         Checkbox: (node) => {
-          const props = node.props as { id: string; label: string; checked: boolean };
+          const props = node.props as {
+            id: string;
+            label: string;
+            checked: boolean;
+          };
           return `<label><input type="checkbox" name="${props.id}" ${props.checked ? "checked" : ""}/>${props.label}</label>`;
         },
         Button: (node) => {
@@ -2943,8 +3072,18 @@ describe("integration: dual-backend friendly headless session", () => {
   it("two sessions sharing data + staging see each other's writes", () => {
     const staging = createStagingBuffer();
     const data = createObservableDataModel({});
-    const a = createHeadlessRenderer({ catalog: ncCatalog, registry, staging, data });
-    const b = createHeadlessRenderer({ catalog: ncCatalog, registry, staging, data });
+    const a = createHeadlessRenderer({
+      catalog: ncCatalog,
+      registry,
+      staging,
+      data,
+    });
+    const b = createHeadlessRenderer({
+      catalog: ncCatalog,
+      registry,
+      staging,
+      data,
+    });
     a.setStagingField("email", "shared@a.com");
     a.setData("user/name", "Alice");
     expect(b.getStaging().get("email")).toBe("shared@a.com");
@@ -2958,12 +3097,18 @@ describe("integration: dual-backend friendly headless session", () => {
       registry,
       onIntent: () => {},
       hooks: {
-        onBeforeRender: (e) => captured.push({ kind: "onBeforeRender", payload: e }),
-        onAfterRender: (e) => captured.push({ kind: "onAfterRender", payload: e }),
-        onElementRender: (e) => captured.push({ kind: "onElementRender", payload: e }),
-        onActionDispatched: (e) => captured.push({ kind: "onActionDispatched", payload: e }),
-        onStagingChange: (e) => captured.push({ kind: "onStagingChange", payload: e }),
-        onDataChange: (e) => captured.push({ kind: "onDataChange", payload: e }),
+        onBeforeRender: (e) =>
+          captured.push({ kind: "onBeforeRender", payload: e }),
+        onAfterRender: (e) =>
+          captured.push({ kind: "onAfterRender", payload: e }),
+        onElementRender: (e) =>
+          captured.push({ kind: "onElementRender", payload: e }),
+        onActionDispatched: (e) =>
+          captured.push({ kind: "onActionDispatched", payload: e }),
+        onStagingChange: (e) =>
+          captured.push({ kind: "onStagingChange", payload: e }),
+        onDataChange: (e) =>
+          captured.push({ kind: "onDataChange", payload: e }),
         onError: (e) => captured.push({ kind: "onError", payload: e }),
       },
     });
@@ -2975,7 +3120,14 @@ describe("integration: dual-backend friendly headless session", () => {
     // Force at least one onError by rendering a tree with a missing child.
     session.render({
       root: "root",
-      elements: { root: { key: "root", type: "Container", props: {}, children: ["ghost"] } },
+      elements: {
+        root: {
+          key: "root",
+          type: "Container",
+          props: {},
+          children: ["ghost"],
+        },
+      },
     });
 
     expect(captured.length).toBeGreaterThan(0);
@@ -3006,9 +3158,15 @@ describe("integration: dual-backend friendly headless session", () => {
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const content = await fs.readFile(file, "utf-8");
-      expect(content, `${file} must not import react`).not.toMatch(/from\s+["']react["']/);
-      expect(content, `${file} must not import react-dom`).not.toMatch(/from\s+["']react-dom["']/);
-      expect(content, `${file} must not import jsdom`).not.toMatch(/from\s+["']jsdom["']/);
+      expect(content, `${file} must not import react`).not.toMatch(
+        /from\s+["']react["']/,
+      );
+      expect(content, `${file} must not import react-dom`).not.toMatch(
+        /from\s+["']react-dom["']/,
+      );
+      expect(content, `${file} must not import jsdom`).not.toMatch(
+        /from\s+["']jsdom["']/,
+      );
       expect(content, `${file} must not import @json-ui/react`).not.toMatch(
         /from\s+["']@json-ui\/react["']/,
       );
@@ -3024,6 +3182,7 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && npm test -- packages/headless/src/
 ```
 
 Expected: every test PASSES. Common failure modes:
+
 - The hook serializability test will fail if any hook event payload contains a `Date`, `Map`, or class instance. The renderer produces only plain objects and the `toSerializableError` helper produces only plain strings, so this should pass on the first try unless someone added a non-serializable field accidentally.
 - The "zero React imports" test will catch any accidental React import. If it fails, find the offending file and remove the import.
 
@@ -3098,24 +3257,24 @@ cd "C:/Users/danie/Dropbox/Github/JSON-UI" && git add packages/headless/src/inde
 
 Mapping each Testable Invariant from `2026-04-13-headless-renderer-design.md` to the test that verifies it:
 
-| # | Invariant | Test location |
-|---|---|---|
-| 1 | Render purity | `renderer.test.ts` "render is a pure function of (tree, state) — Invariant 1" (back-to-back render with `toEqual` deep check) |
-| 2 | Visibility pruning | `walker.test.ts` "prunes invisible elements" + "prunes elements with a path-based visibility resolving false" |
-| 3 | DynamicValue resolution | `context.test.ts` "resolves DynamicValue against data" + "resolves DynamicValue against staging when path is a single-segment field id" + "prefers staging over data" + "falls back to data" + "resolveAction returns a NormalizedAction" |
-| 4 | Staging read discipline | `context.test.ts` "exposes a read-only staging view" — the test asserts `set`/`delete`/`subscribe` are absent from the view |
-| 5 | Buffer not cleared on dispatch | `renderer.test.ts` "buffer is NOT cleared on dispatch" |
-| 6 | IntentEvent shape compatibility | `renderer.test.ts` "dispatch emits a structurally correct IntentEvent" + integration test JSON round-trip |
-| 7 | Hook firing order | `renderer.test.ts` "fires onBeforeRender, onElementRender, onAfterRender in order" + `walker.test.ts` "fires onElementRender once per visible element in walk order" |
-| 8 | No React imports | `integration.test.ts` "zero React imports across every source file" |
-| 9 | Serializer independence | Verified by type — `Serializer<Output>` interface only takes a `NormalizedNode`. No test asserts this directly but the type is the proof. |
-| 10 | Unknown component type handling | `walker.test.ts` "handles an unknown component type with a fallback Unknown node + onError" |
-| 11 | Hook event serializability | `integration.test.ts` "every emitted hook event is JSON.stringify/parse round-trip safe" |
-| 12 | `initialData` validation matrix | Covered by Plan 1's `runtime-validation.test.ts`; the renderer test file additionally has "validates initialData and throws InitialDataNotSerializableError on bad input" as a sanity check. The exhaustive disqualified-set matrix lives in core. |
-| 13 | Observable store synchronous notification | Plan 1's `runtime.test.ts`; integration test "two sessions sharing data + staging see each other's writes" verifies the dual-session sharing path |
-| 14 | `toSerializableError` cause chain walks | `errors.test.ts` "walks a multi-level cause chain" + "stops cause-chain walking at depth 8" + "handles a string cause" + "coerces an unknown throwable" |
-| 15 | Render-pass purity on shared stores | `renderer.test.ts` "each render pass captures a consistent state snapshot — Invariant 15" (writes between two passes; passA's output unchanged by the later write). The within-pass case is structurally guaranteed by Node's single-threaded execution model + the read-only view contract — a component cannot mutate state during its own render because the views have no write methods. |
-| 16 | Walker error handling for missing child keys | `walker.test.ts` "handles a missing child key by emitting onError and skipping" + `renderer.test.ts` "onError on missing-child does not crash the render" |
+| #   | Invariant                                    | Test location                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Render purity                                | `renderer.test.ts` "render is a pure function of (tree, state) — Invariant 1" (back-to-back render with `toEqual` deep check)                                                                                                                                                                                                                                                                |
+| 2   | Visibility pruning                           | `walker.test.ts` "prunes invisible elements" + "prunes elements with a path-based visibility resolving false"                                                                                                                                                                                                                                                                                |
+| 3   | DynamicValue resolution                      | `context.test.ts` "resolves DynamicValue against data" + "resolves DynamicValue against staging when path is a single-segment field id" + "prefers staging over data" + "falls back to data" + "resolveAction returns a NormalizedAction"                                                                                                                                                    |
+| 4   | Staging read discipline                      | `context.test.ts` "exposes a read-only staging view" — the test asserts `set`/`delete`/`subscribe` are absent from the view                                                                                                                                                                                                                                                                  |
+| 5   | Buffer not cleared on dispatch               | `renderer.test.ts` "buffer is NOT cleared on dispatch"                                                                                                                                                                                                                                                                                                                                       |
+| 6   | IntentEvent shape compatibility              | `renderer.test.ts` "dispatch emits a structurally correct IntentEvent" + integration test JSON round-trip                                                                                                                                                                                                                                                                                    |
+| 7   | Hook firing order                            | `renderer.test.ts` "fires onBeforeRender, onElementRender, onAfterRender in order" + `walker.test.ts` "fires onElementRender once per visible element in walk order"                                                                                                                                                                                                                         |
+| 8   | No React imports                             | `integration.test.ts` "zero React imports across every source file"                                                                                                                                                                                                                                                                                                                          |
+| 9   | Serializer independence                      | Verified by type — `Serializer<Output>` interface only takes a `NormalizedNode`. No test asserts this directly but the type is the proof.                                                                                                                                                                                                                                                    |
+| 10  | Unknown component type handling              | `walker.test.ts` "handles an unknown component type with a fallback Unknown node + onError"                                                                                                                                                                                                                                                                                                  |
+| 11  | Hook event serializability                   | `integration.test.ts` "every emitted hook event is JSON.stringify/parse round-trip safe"                                                                                                                                                                                                                                                                                                     |
+| 12  | `initialData` validation matrix              | Covered by Plan 1's `runtime-validation.test.ts`; the renderer test file additionally has "validates initialData and throws InitialDataNotSerializableError on bad input" as a sanity check. The exhaustive disqualified-set matrix lives in core.                                                                                                                                           |
+| 13  | Observable store synchronous notification    | Plan 1's `runtime.test.ts`; integration test "two sessions sharing data + staging see each other's writes" verifies the dual-session sharing path                                                                                                                                                                                                                                            |
+| 14  | `toSerializableError` cause chain walks      | `errors.test.ts` "walks a multi-level cause chain" + "stops cause-chain walking at depth 8" + "handles a string cause" + "coerces an unknown throwable"                                                                                                                                                                                                                                      |
+| 15  | Render-pass purity on shared stores          | `renderer.test.ts` "each render pass captures a consistent state snapshot — Invariant 15" (writes between two passes; passA's output unchanged by the later write). The within-pass case is structurally guaranteed by Node's single-threaded execution model + the read-only view contract — a component cannot mutate state during its own render because the views have no write methods. |
+| 16  | Walker error handling for missing child keys | `walker.test.ts` "handles a missing child key by emitting onError and skipping" + `renderer.test.ts` "onError on missing-child does not crash the render"                                                                                                                                                                                                                                    |
 
 **Spec coverage:** every invariant maps to at least one test. Invariant 9 is type-enforced (the `Serializer<Output>` interface mechanically prevents access to session/context). Invariant 15 has both a behavioral test (writes between passes) and a structural argument for the within-pass case (Node single-threaded + read-only views).
 

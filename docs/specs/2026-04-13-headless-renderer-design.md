@@ -81,7 +81,7 @@ Every file has one clear responsibility. The longest file in v1 is expected to b
 
 The central data structure the renderer produces. It is a pure JavaScript object, serializable without any custom logic, and contains everything a consumer needs to display the UI or assert on its state without re-running any evaluation.
 
-*Note: `NormalizedNode` uses `JSONValue` in several field types. `JSONValue` is defined in the "Runtime Types and the Observable Store Pattern" section below. For the moment, read `JSONValue` as "any JSON-round-trippable value" — the formal definition is a union of `null | boolean | number | string | JSONValue[] | {[k: string]: JSONValue}`.*
+_Note: `NormalizedNode` uses `JSONValue` in several field types. `JSONValue` is defined in the "Runtime Types and the Observable Store Pattern" section below. For the moment, read `JSONValue` as "any JSON-round-trippable value" — the formal definition is a union of `null | boolean | number | string | JSONValue[] | {[k: string]: JSONValue}`._
 
 ```typescript
 /** A rendered element node. Fully resolved — no dynamic values, no unevaluated visibility. */
@@ -101,8 +101,8 @@ export interface NormalizedNode {
   /** Optional metadata for observability — set only when RenderHooks are in use. */
   meta?: {
     renderDurationMs?: number;
-    visible: boolean;        // always true in output; false-visibility elements are pruned
-    validatedAt?: number;    // timestamp of last validation run
+    visible: boolean; // always true in output; false-visibility elements are pruned
+    validatedAt?: number; // timestamp of last validation run
   };
 }
 
@@ -346,7 +346,7 @@ Three concrete prerequisites must land before or alongside `@json-ui/headless`:
 
 **Prerequisite 2: `@json-ui/react`'s `DataProvider` accepts an external observable data model.** The current `packages/react/src/contexts/data.tsx` uses `useState<DataModel>(initialData)` which consumes `initialData` as a seed and cannot be externally mutated. The change: add an optional `store?: ObservableDataModel` prop; when provided, use `useSyncExternalStore(store.subscribe, store.snapshot)` to bind to the external store; when absent, fall back to the current `useState`-based behavior for backward compatibility. Scope is limited to `contexts/data.tsx` — `ValidationProvider` and `ActionProvider` do not hold `DataModel` state and do not need changes. Scheduled as a separate plan (`packages/react` follow-up).
 
-**Prerequisite 3: NC's `NCRenderer` accepts an external `StagingBuffer` reference.** NC's ephemeral-UI-state spec (`neural-computer/docs/specs/2026-04-11-ephemeral-ui-state-design.md`) currently has `StagingBufferProvider` create a fresh buffer via `useRef`. That spec needs a follow-up amendment adding a `store?: StagingBuffer` prop to `StagingBufferProvider`, with the same conditional-external-vs-internal fallback. Input components consume the buffer via the existing `useStagingBuffer` hook, which transparently reads from whichever buffer the provider holds. This is an NC-side change documented here but speced there. Note that the *staging* side of dual-backend sharing is Prerequisite 3 (NC-owned), not Prerequisite 2 — `@json-ui/react` does not host a staging-buffer provider, only a data provider.
+**Prerequisite 3: NC's `NCRenderer` accepts an external `StagingBuffer` reference.** NC's ephemeral-UI-state spec (`neural-computer/docs/specs/2026-04-11-ephemeral-ui-state-design.md`) currently has `StagingBufferProvider` create a fresh buffer via `useRef`. That spec needs a follow-up amendment adding a `store?: StagingBuffer` prop to `StagingBufferProvider`, with the same conditional-external-vs-internal fallback. Input components consume the buffer via the existing `useStagingBuffer` hook, which transparently reads from whichever buffer the provider holds. This is an NC-side change documented here but speced there. Note that the _staging_ side of dual-backend sharing is Prerequisite 3 (NC-owned), not Prerequisite 2 — `@json-ui/react` does not host a staging-buffer provider, only a data provider.
 
 Until Prerequisites 2 and 3 ship, the headless package can be implemented, tested, and used standalone (its own sessions, its own state), but the dual-backend sample code in the Session API section assumes they exist. Standalone-testing of the headless package does not require them — it creates its own stores internally.
 
@@ -503,11 +503,12 @@ export type HeadlessRegistry = Record<string, HeadlessComponent>;
 An example headless `TextField` component:
 
 ```typescript
-const TextField: HeadlessComponent<{ id: string; label: string; placeholder?: string; error?: string }> = (
-  element,
-  ctx,
-  _children,
-) => {
+const TextField: HeadlessComponent<{
+  id: string;
+  label: string;
+  placeholder?: string;
+  error?: string;
+}> = (element, ctx, _children) => {
   const id = element.props.id;
   const currentValue = ctx.staging.get(id);
   return {
@@ -567,7 +568,10 @@ export interface HeadlessContext {
   /** Evaluate a visibility condition against the current read views + auth state. */
   evaluateVisibility(condition: VisibilityCondition | undefined): boolean;
   /** Run validation for an input element's config. */
-  runValidation(config: ValidationConfig, value: JSONValue): NormalizedValidation;
+  runValidation(
+    config: ValidationConfig,
+    value: JSONValue,
+  ): NormalizedValidation;
   /** Helper: construct a resolved NormalizedAction from a catalog action. */
   resolveAction(action: Action): NormalizedAction;
 }
@@ -629,8 +633,8 @@ export type RenderPassId = number;
  * construction time and throws if `initialData` contains non-JSON values.
  */
 export interface SessionStateSnapshot {
-  staging: StagingSnapshot;    // already constrained to JSONValue by the StagingBuffer contract
-  data: Record<string, JSONValue>;  // durable data, strictly JSON-round-trippable
+  staging: StagingSnapshot; // already constrained to JSONValue by the StagingBuffer contract
+  data: Record<string, JSONValue>; // durable data, strictly JSON-round-trippable
   catalogVersion?: string;
 }
 
@@ -642,7 +646,7 @@ export interface SessionStateSnapshot {
 export interface SerializableError {
   name: string;
   message: string;
-  stack?: string;               // string form of the stack, if available
+  stack?: string; // string form of the stack, if available
   phase: RenderPhase;
   /** Recursive chain of caused-by errors, if any. Each entry is itself serializable. */
   cause?: Omit<SerializableError, "phase">;
@@ -671,7 +675,10 @@ export interface SerializableError {
  *   - Top-level error has `phase`; nested causes do not (the `Omit<..., "phase">`
  *     in the SerializableError type).
  */
-export function toSerializableError(error: unknown, phase: RenderPhase): SerializableError;
+export function toSerializableError(
+  error: unknown,
+  phase: RenderPhase,
+): SerializableError;
 
 export interface RenderHooks {
   /** Called before a render pass begins. */
@@ -706,7 +713,7 @@ export interface RenderHooks {
   /** Called whenever the staging buffer is mutated through the session (setStagingField). */
   onStagingChange(event: {
     fieldId: FieldId;
-    newValue: JSONValue;        // enforced by StagingBuffer contract
+    newValue: JSONValue; // enforced by StagingBuffer contract
     oldValue: JSONValue | undefined;
     timestamp: number;
   }): void;
@@ -726,7 +733,7 @@ export interface RenderHooks {
 
 **Seven hooks, not nine.** Earlier drafts of this spec defined `onVisibilityEvaluated` and `onValidationRun` as per-element events fired during each render pass. The review team pointed out that both are (partially) recoverable from the `NormalizedNode` tree itself — visibility is expressed by presence or absence in the `children` array, validation state is attached to each input element's `validation` field. For Observers that hold BOTH the input `UITree` (via `onBeforeRender.tree`) and the output `NormalizedNode` (via `onAfterRender.result`), visibility decisions are recoverable by diffing the two trees: an element present in the input but absent from the output was pruned by visibility. Both hooks are **deferred to v1.1** and will be added back only when a concrete consumer demonstrates a use case not satisfied by before/after diffing.
 
-*Acknowledged gap: an Observer that sees only a `NormalizedNode` snapshot in isolation — without the source `UITree` that produced it — cannot distinguish "element was filtered out by visibility" from "element was never in the source tree." This ambiguity is real and matters for scenarios where a persisted snapshot is replayed later without its source tree. Observers that need offline visibility reasoning must persist the raw `UITree` alongside the `NormalizedNode`, or subscribe to both `onBeforeRender` and `onAfterRender` and correlate via `passId`. The spec chose not to add `onVisibilityEvaluated` back solely for this case because: (a) the persist-both workaround is cheap, (b) online Observers don't need it, and (c) no current consumer has demanded offline visibility reasoning. Revisited in v1.1 if that changes.*
+_Acknowledged gap: an Observer that sees only a `NormalizedNode` snapshot in isolation — without the source `UITree` that produced it — cannot distinguish "element was filtered out by visibility" from "element was never in the source tree." This ambiguity is real and matters for scenarios where a persisted snapshot is replayed later without its source tree. Observers that need offline visibility reasoning must persist the raw `UITree` alongside the `NormalizedNode`, or subscribe to both `onBeforeRender` and `onAfterRender` and correlate via `passId`. The spec chose not to add `onVisibilityEvaluated` back solely for this case because: (a) the persist-both workaround is cheap, (b) online Observers don't need it, and (c) no current consumer has demanded offline visibility reasoning. Revisited in v1.1 if that changes._
 
 **Every hook's payload is strictly JSON-round-trippable.** Every field satisfies `JSONValue` at the type level. The session constructor validates `options.initialData` (if provided) at session creation time and throws `InitialDataNotSerializableError` if the input contains a `Date`, `Map`, `Set`, class instance, function, or symbol. The `StagingBuffer` and `ObservableDataModel` contracts constrain writes to `JSONValue`, so any value reaching a hook payload has already passed validation. `Error` objects are converted to `SerializableError` via `toSerializableError()` before `onError` is called, capturing stack and cause chain as plain strings. `passId` lets out-of-process consumers correlate per-element events with their render pass; `timestamp` gives intra-session ordering without requiring the log consumer to trust wall clocks.
 
@@ -782,14 +789,19 @@ Two concrete serializers ship in v1:
 
 ```typescript
 export interface HtmlSerializerOptions {
-  emitters: Record<string, (node: NormalizedNode, emitChildren: () => string) => string>;
+  emitters: Record<
+    string,
+    (node: NormalizedNode, emitChildren: () => string) => string
+  >;
   /** Fallback emitter for unknown types. Default: `<div data-type="..."></div>`. */
   fallback?: (node: NormalizedNode, emitChildren: () => string) => string;
   /** Whether to escape text content in props (default true). */
   escapeText?: boolean;
 }
 
-export function createHtmlSerializer(options: HtmlSerializerOptions): Serializer<string>;
+export function createHtmlSerializer(
+  options: HtmlSerializerOptions,
+): Serializer<string>;
 ```
 
 Consumers provide a map like `{ TextField: (node) => \`<label>${node.props.label}<input value="${node.props.value}" /></label>\` }`. This keeps the HTML serializer **content-agnostic** — it knows how to walk and escape and concatenate, but not what any given component type should look like. Consumers own their visual language.
@@ -911,7 +923,7 @@ onAfterRender(passId, result, elapsedMs)
 
 5. **~~Where do `FieldId`, `StagingBuffer`, and `IntentEvent` live?~~ (resolved).** The first draft of this spec said "promote them from NC into `@json-ui/core`." The review team pointed out that these types don't exist anywhere yet — NC's ephemeral-UI-state spec describes a raw `Map<FieldId, unknown>` for the staging buffer, no TypeScript source has been written, and the headless renderer needs a richer interface (subscribe/notify, snapshot, reconcile) than a bare Map can provide. There was nothing to "promote." **Resolved:** the runtime types are authored fresh in a new `packages/core/src/runtime.ts` module. The concrete interface definitions are in the "Runtime Types and the Observable Store Pattern" section above, not deferred to a separate spec. NC's ephemeral-UI-state spec will need a follow-up amendment to use the observable `StagingBuffer` interface instead of a raw `Map<FieldId, unknown>` via `useRef`; that amendment is listed as Prerequisite 3.
 
-6. **Is the cross-component transaction log in scope for this spec?** No. The spec defines the hook interface that *publishes* events suitable for a transaction log, and enforces that every hook payload is serializable so an out-of-process consumer can subscribe. What it does not define is the log itself: routing, persistence, replay, querying, ordering across the UI/Process/Memory layers, how the Observer subscribes, how backpressure is handled. That is NC architecture and deserves its own spec. The headless renderer's commitment is narrower and mechanical: "every event is serializable, every event carries a `passId` and `timestamp`, the firing order within a render pass is deterministic." If the transaction log spec later needs additional fields for cross-layer correlation, those are added then — adding optional fields to the `RenderHooks` payload interfaces is structurally non-breaking in TypeScript, so there is no pre-allocation benefit and no reason to litter v1 events with fields no consumer uses.
+6. **Is the cross-component transaction log in scope for this spec?** No. The spec defines the hook interface that _publishes_ events suitable for a transaction log, and enforces that every hook payload is serializable so an out-of-process consumer can subscribe. What it does not define is the log itself: routing, persistence, replay, querying, ordering across the UI/Process/Memory layers, how the Observer subscribes, how backpressure is handled. That is NC architecture and deserves its own spec. The headless renderer's commitment is narrower and mechanical: "every event is serializable, every event carries a `passId` and `timestamp`, the firing order within a render pass is deterministic." If the transaction log spec later needs additional fields for cross-layer correlation, those are added then — adding optional fields to the `RenderHooks` payload interfaces is structurally non-breaking in TypeScript, so there is no pre-allocation benefit and no reason to litter v1 events with fields no consumer uses.
 
 7. **Default hook behavior: no-op vs. log-to-stderr?** This spec commits to **no-op default**. Zero-cost matters when observability is not in use, and consumers who want stderr logging install a one-line adapter (`hooks: { onElementRender: (e) => console.error(JSON.stringify(e)) }`). Resolved.
 
