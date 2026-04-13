@@ -46,10 +46,7 @@ describe("createCatalog", () => {
         input: { props: z.object({ value: z.string() }) },
       },
       functions: {
-        customValidator: {
-          validate: (value) => typeof value === "string" && value.length > 0,
-          description: "Custom validation",
-        },
+        customValidator: (value) => typeof value === "string" && value.length > 0,
       },
     });
 

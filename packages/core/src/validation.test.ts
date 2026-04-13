@@ -9,79 +9,79 @@ import {
 describe("builtInValidationFunctions", () => {
   describe("required", () => {
     it("passes for non-empty values", () => {
-      expect(builtInValidationFunctions.required("hello")).toBe(true);
-      expect(builtInValidationFunctions.required(0)).toBe(true);
-      expect(builtInValidationFunctions.required(false)).toBe(true);
-      expect(builtInValidationFunctions.required(["item"])).toBe(true);
-      expect(builtInValidationFunctions.required({ key: "value" })).toBe(true);
+      expect(builtInValidationFunctions.required!("hello")).toBe(true);
+      expect(builtInValidationFunctions.required!(0)).toBe(true);
+      expect(builtInValidationFunctions.required!(false)).toBe(true);
+      expect(builtInValidationFunctions.required!(["item"])).toBe(true);
+      expect(builtInValidationFunctions.required!({ key: "value" })).toBe(true);
     });
 
     it("fails for empty values", () => {
-      expect(builtInValidationFunctions.required("")).toBe(false);
-      expect(builtInValidationFunctions.required("   ")).toBe(false);
-      expect(builtInValidationFunctions.required(null)).toBe(false);
-      expect(builtInValidationFunctions.required(undefined)).toBe(false);
-      expect(builtInValidationFunctions.required([])).toBe(false);
+      expect(builtInValidationFunctions.required!("")).toBe(false);
+      expect(builtInValidationFunctions.required!("   ")).toBe(false);
+      expect(builtInValidationFunctions.required!(null)).toBe(false);
+      expect(builtInValidationFunctions.required!(undefined)).toBe(false);
+      expect(builtInValidationFunctions.required!([])).toBe(false);
     });
   });
 
   describe("email", () => {
     it("passes for valid emails", () => {
-      expect(builtInValidationFunctions.email("test@example.com")).toBe(true);
-      expect(builtInValidationFunctions.email("user.name@domain.co")).toBe(
+      expect(builtInValidationFunctions.email!("test@example.com")).toBe(true);
+      expect(builtInValidationFunctions.email!("user.name@domain.co")).toBe(
         true,
       );
-      expect(builtInValidationFunctions.email("a@b.c")).toBe(true);
+      expect(builtInValidationFunctions.email!("a@b.c")).toBe(true);
     });
 
     it("fails for invalid emails", () => {
-      expect(builtInValidationFunctions.email("invalid")).toBe(false);
-      expect(builtInValidationFunctions.email("missing@domain")).toBe(false);
-      expect(builtInValidationFunctions.email("@domain.com")).toBe(false);
-      expect(builtInValidationFunctions.email("user@")).toBe(false);
-      expect(builtInValidationFunctions.email(123)).toBe(false);
+      expect(builtInValidationFunctions.email!("invalid")).toBe(false);
+      expect(builtInValidationFunctions.email!("missing@domain")).toBe(false);
+      expect(builtInValidationFunctions.email!("@domain.com")).toBe(false);
+      expect(builtInValidationFunctions.email!("user@")).toBe(false);
+      expect(builtInValidationFunctions.email!(123)).toBe(false);
     });
   });
 
   describe("minLength", () => {
     it("passes when string meets minimum length", () => {
-      expect(builtInValidationFunctions.minLength("hello", { min: 3 })).toBe(
+      expect(builtInValidationFunctions.minLength!("hello", { min: 3 })).toBe(
         true,
       );
-      expect(builtInValidationFunctions.minLength("abc", { min: 3 })).toBe(
+      expect(builtInValidationFunctions.minLength!("abc", { min: 3 })).toBe(
         true,
       );
-      expect(builtInValidationFunctions.minLength("abcdef", { min: 3 })).toBe(
+      expect(builtInValidationFunctions.minLength!("abcdef", { min: 3 })).toBe(
         true,
       );
     });
 
     it("fails when string is too short", () => {
-      expect(builtInValidationFunctions.minLength("hi", { min: 3 })).toBe(
+      expect(builtInValidationFunctions.minLength!("hi", { min: 3 })).toBe(
         false,
       );
-      expect(builtInValidationFunctions.minLength("", { min: 1 })).toBe(false);
+      expect(builtInValidationFunctions.minLength!("", { min: 1 })).toBe(false);
     });
 
     it("fails for non-strings", () => {
-      expect(builtInValidationFunctions.minLength(123, { min: 1 })).toBe(false);
+      expect(builtInValidationFunctions.minLength!(123, { min: 1 })).toBe(false);
     });
 
     it("fails when min is not provided", () => {
-      expect(builtInValidationFunctions.minLength("hello", {})).toBe(false);
+      expect(builtInValidationFunctions.minLength!("hello", {})).toBe(false);
     });
   });
 
   describe("maxLength", () => {
     it("passes when string meets maximum length", () => {
-      expect(builtInValidationFunctions.maxLength("hi", { max: 5 })).toBe(true);
-      expect(builtInValidationFunctions.maxLength("hello", { max: 5 })).toBe(
+      expect(builtInValidationFunctions.maxLength!("hi", { max: 5 })).toBe(true);
+      expect(builtInValidationFunctions.maxLength!("hello", { max: 5 })).toBe(
         true,
       );
     });
 
     it("fails when string exceeds maximum", () => {
-      expect(builtInValidationFunctions.maxLength("hello!", { max: 5 })).toBe(
+      expect(builtInValidationFunctions.maxLength!("hello!", { max: 5 })).toBe(
         false,
       );
     });
@@ -90,7 +90,7 @@ describe("builtInValidationFunctions", () => {
   describe("pattern", () => {
     it("passes when string matches pattern", () => {
       expect(
-        builtInValidationFunctions.pattern("abc123", {
+        builtInValidationFunctions.pattern!("abc123", {
           pattern: "^[a-z0-9]+$",
         }),
       ).toBe(true);
@@ -98,92 +98,92 @@ describe("builtInValidationFunctions", () => {
 
     it("fails when string does not match pattern", () => {
       expect(
-        builtInValidationFunctions.pattern("ABC", { pattern: "^[a-z]+$" }),
+        builtInValidationFunctions.pattern!("ABC", { pattern: "^[a-z]+$" }),
       ).toBe(false);
     });
 
     it("fails for invalid regex pattern", () => {
       expect(
-        builtInValidationFunctions.pattern("test", { pattern: "[invalid" }),
+        builtInValidationFunctions.pattern!("test", { pattern: "[invalid" }),
       ).toBe(false);
     });
   });
 
   describe("min", () => {
     it("passes when number meets minimum", () => {
-      expect(builtInValidationFunctions.min(5, { min: 3 })).toBe(true);
-      expect(builtInValidationFunctions.min(3, { min: 3 })).toBe(true);
+      expect(builtInValidationFunctions.min!(5, { min: 3 })).toBe(true);
+      expect(builtInValidationFunctions.min!(3, { min: 3 })).toBe(true);
     });
 
     it("fails when number is below minimum", () => {
-      expect(builtInValidationFunctions.min(2, { min: 3 })).toBe(false);
+      expect(builtInValidationFunctions.min!(2, { min: 3 })).toBe(false);
     });
 
     it("fails for non-numbers", () => {
-      expect(builtInValidationFunctions.min("5", { min: 3 })).toBe(false);
+      expect(builtInValidationFunctions.min!("5", { min: 3 })).toBe(false);
     });
   });
 
   describe("max", () => {
     it("passes when number meets maximum", () => {
-      expect(builtInValidationFunctions.max(3, { max: 5 })).toBe(true);
-      expect(builtInValidationFunctions.max(5, { max: 5 })).toBe(true);
+      expect(builtInValidationFunctions.max!(3, { max: 5 })).toBe(true);
+      expect(builtInValidationFunctions.max!(5, { max: 5 })).toBe(true);
     });
 
     it("fails when number exceeds maximum", () => {
-      expect(builtInValidationFunctions.max(6, { max: 5 })).toBe(false);
+      expect(builtInValidationFunctions.max!(6, { max: 5 })).toBe(false);
     });
   });
 
   describe("numeric", () => {
     it("passes for numbers", () => {
-      expect(builtInValidationFunctions.numeric(42)).toBe(true);
-      expect(builtInValidationFunctions.numeric(3.14)).toBe(true);
-      expect(builtInValidationFunctions.numeric(0)).toBe(true);
+      expect(builtInValidationFunctions.numeric!(42)).toBe(true);
+      expect(builtInValidationFunctions.numeric!(3.14)).toBe(true);
+      expect(builtInValidationFunctions.numeric!(0)).toBe(true);
     });
 
     it("passes for numeric strings", () => {
-      expect(builtInValidationFunctions.numeric("42")).toBe(true);
-      expect(builtInValidationFunctions.numeric("3.14")).toBe(true);
+      expect(builtInValidationFunctions.numeric!("42")).toBe(true);
+      expect(builtInValidationFunctions.numeric!("3.14")).toBe(true);
     });
 
     it("fails for non-numeric values", () => {
-      expect(builtInValidationFunctions.numeric("abc")).toBe(false);
-      expect(builtInValidationFunctions.numeric(NaN)).toBe(false);
-      expect(builtInValidationFunctions.numeric(null)).toBe(false);
+      expect(builtInValidationFunctions.numeric!("abc")).toBe(false);
+      expect(builtInValidationFunctions.numeric!(NaN)).toBe(false);
+      expect(builtInValidationFunctions.numeric!(null)).toBe(false);
     });
   });
 
   describe("url", () => {
     it("passes for valid URLs", () => {
-      expect(builtInValidationFunctions.url("https://example.com")).toBe(true);
-      expect(builtInValidationFunctions.url("http://localhost:3000")).toBe(
+      expect(builtInValidationFunctions.url!("https://example.com")).toBe(true);
+      expect(builtInValidationFunctions.url!("http://localhost:3000")).toBe(
         true,
       );
       expect(
-        builtInValidationFunctions.url("https://example.com/path?query=1"),
+        builtInValidationFunctions.url!("https://example.com/path?query=1"),
       ).toBe(true);
     });
 
     it("fails for invalid URLs", () => {
-      expect(builtInValidationFunctions.url("not-a-url")).toBe(false);
-      expect(builtInValidationFunctions.url("example.com")).toBe(false);
+      expect(builtInValidationFunctions.url!("not-a-url")).toBe(false);
+      expect(builtInValidationFunctions.url!("example.com")).toBe(false);
     });
   });
 
   describe("matches", () => {
     it("passes when values match", () => {
       expect(
-        builtInValidationFunctions.matches("password", { other: "password" }),
+        builtInValidationFunctions.matches!("password", { other: "password" }),
       ).toBe(true);
-      expect(builtInValidationFunctions.matches(123, { other: 123 })).toBe(
+      expect(builtInValidationFunctions.matches!(123, { other: 123 })).toBe(
         true,
       );
     });
 
     it("fails when values do not match", () => {
       expect(
-        builtInValidationFunctions.matches("password", { other: "different" }),
+        builtInValidationFunctions.matches!("password", { other: "different" }),
       ).toBe(false);
     });
   });
