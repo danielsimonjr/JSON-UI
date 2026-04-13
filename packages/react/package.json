@@ -1,0 +1,44 @@
+{
+  "name": "@json-ui/react",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "React renderer for @json-ui/core. Renders catalog-constrained JSON trees as React components with data binding, actions, visibility, and validation.",
+  "keywords": [
+    "json",
+    "ui",
+    "react",
+    "ai",
+    "llm",
+    "generative-ui",
+    "renderer"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@json-ui/core": "*"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.3",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

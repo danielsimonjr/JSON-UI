@@ -1,0 +1,45 @@
+{
+  "name": "@json-ui/core",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Core schemas, types, catalog, actions, visibility, and validation for JSON-UI. Framework-agnostic.",
+  "keywords": [
+    "json",
+    "ui",
+    "ai",
+    "llm",
+    "generative-ui",
+    "schema",
+    "zod",
+    "catalog",
+    "constrained"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  }
+}
