@@ -1,0 +1,39 @@
+{
+  "name": "@json-ui/headless",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Framework-agnostic headless renderer for @json-ui/core. Renders catalog-constrained UI trees to a normalized intermediate representation. Designed for LLM observer layers, server-side rendering, and non-React contexts.",
+  "keywords": [
+    "json",
+    "ui",
+    "ai",
+    "llm",
+    "generative-ui",
+    "headless",
+    "renderer",
+    "framework-agnostic"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@json-ui/core": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}
