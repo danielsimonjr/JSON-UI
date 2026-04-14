@@ -318,4 +318,123 @@ describe("createObservableDataModel - snapshot identity and notification", () =>
     m.set("y", 2);
     expect(calls).toBe(1);
   });
+  test("listener errors are swallowed and do not affect other listeners", () => {
+    // Mirrors the StagingBuffer listener-error-isolation test — the
+    // ObservableDataModel has its own try/catch around listener() calls
+    // and must satisfy the same spec invariant.
+    const m = createObservableDataModel();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let goodCalls = 0;
+    m.subscribe(() => {
+      throw new Error("boom");
+    });
+    m.subscribe(() => {
+      goodCalls++;
+    });
+    expect(() => m.set("x", 1)).not.toThrow();
+    expect(goodCalls).toBe(1);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});
+
+describe("createObservableDataModel - empty-path edge cases (review fix)", () => {
+  // Review caught two bugs in the initial implementation: get("") was
+  // returning the live mutable `root` object, and set("") was firing
+  // spurious subscriber notifications on a no-op write. These tests lock
+  // in the correct behavior.
+  test('get("") returns undefined, not the internal root reference', () => {
+    const m = createObservableDataModel({ a: 1 });
+    expect(m.get("")).toBeUndefined();
+  });
+  test('get("") does not let callers mutate internal state', () => {
+    const m = createObservableDataModel({ a: 1 });
+    const result = m.get("");
+    expect(result).toBeUndefined();
+    // Confirm the store is still pristine — snapshot returns identity-stable.
+    const snap1 = m.snapshot();
+    const snap2 = m.snapshot();
+    expect(snap1).toBe(snap2);
+    expect(snap1).toEqual({ a: 1 });
+  });
+  test('set("") is a no-op and fires NO subscriber notification', () => {
+    const m = createObservableDataModel({ a: 1 });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    const snap1 = m.snapshot();
+    m.set("", "ignored");
+    const snap2 = m.snapshot();
+    expect(calls).toBe(0);
+    expect(snap1).toBe(snap2); // snapshot cache not invalidated
+    expect(m.get("a")).toBe(1); // state unchanged
+  });
+  test('delete("") is a no-op and fires NO subscriber notification', () => {
+    const m = createObservableDataModel({ a: 1 });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.delete("");
+    expect(calls).toBe(0);
+    expect(m.get("a")).toBe(1);
+  });
+});
+
+describe("createStagingBuffer - self-unsubscribe during notify", () => {
+  // Spec "Set-during-notify is allowed" covers the general case; the
+  // implementation uses Array.from(listeners.values()) to snapshot the
+  // listener set at notification time so iteration is not corrupted when
+  // a callback unsubscribes another callback. This test exercises that
+  // behavior end-to-end.
+  test("listener A unsubscribing listener B mid-notify still fires B in the current tick", () => {
+    const buf = createStagingBuffer();
+    let bCalls = 0;
+    let unsubB: (() => void) | null = null;
+    buf.subscribe(() => {
+      // First listener runs and unsubscribes the second — but iteration
+      // already captured B via Array.from, so B still fires this tick.
+      if (unsubB) unsubB();
+    });
+    unsubB = buf.subscribe(() => {
+      bCalls++;
+    });
+    buf.set("x", 1);
+    expect(bCalls).toBe(1);
+    // On the NEXT write, B is no longer in the Map and does not fire.
+    buf.set("x", 2);
+    expect(bCalls).toBe(1);
+  });
+  test("listener that unsubscribes itself does not fire on subsequent writes", () => {
+    const buf = createStagingBuffer();
+    let calls = 0;
+    let unsub: (() => void) | null = null;
+    unsub = buf.subscribe(() => {
+      calls++;
+      if (unsub) unsub();
+    });
+    buf.set("x", 1);
+    expect(calls).toBe(1);
+    buf.set("y", 2);
+    expect(calls).toBe(1); // no further fire after self-unsub
+  });
+});
+
+describe("createObservableDataModel - self-unsubscribe during notify", () => {
+  test("listener A unsubscribing listener B mid-notify still fires B in the current tick", () => {
+    const m = createObservableDataModel();
+    let bCalls = 0;
+    let unsubB: (() => void) | null = null;
+    m.subscribe(() => {
+      if (unsubB) unsubB();
+    });
+    unsubB = m.subscribe(() => {
+      bCalls++;
+    });
+    m.set("x", 1);
+    expect(bCalls).toBe(1);
+    m.set("y", 2);
+    expect(bCalls).toBe(1);
+  });
 });

@@ -197,4 +197,59 @@ describe("validateJSONValue - allowed containers", () => {
     obj.x = "hello";
     expect(() => validateJSONValue(obj, "")).not.toThrow();
   });
+  test("rejects Object.create(null) with a Date property (Invariant 12 negative case)", () => {
+    // Spec Invariant 12 explicitly names the negative shape: a null-prototype
+    // object is accepted ONLY when its values are all JSONValue. If a
+    // disqualified value lives on it, the validator must still reject.
+    const obj = Object.create(null) as Record<string, unknown>;
+    obj.when = new Date();
+    expect.assertions(2);
+    expect(() => validateJSONValue(obj, "")).toThrow(
+      InitialDataNotSerializableError,
+    );
+    try {
+      validateJSONValue(obj, "");
+    } catch (err) {
+      expect((err as InitialDataNotSerializableError).path).toBe("/when");
+    }
+  });
+});
+
+describe("validateJSONValue - URL top-level rejection (dedicated instanceof branch)", () => {
+  test("rejects URL at top level with actualType 'URL' (not 'URL (non-plain object)')", () => {
+    // Verifies the dedicated `instanceof URL` branch added in the review fix.
+    // Prior to that branch, URL fell through to the non-plain-object check and
+    // surfaced as "URL (non-plain object)", leaking implementation detail into
+    // the error message. The dedicated branch keeps the error surface clean.
+    expect.assertions(2);
+    const url = new URL("https://example.com");
+    expect(() => validateJSONValue(url, "")).toThrow(
+      InitialDataNotSerializableError,
+    );
+    try {
+      validateJSONValue(url, "");
+    } catch (err) {
+      expect((err as InitialDataNotSerializableError).actualType).toBe("URL");
+    }
+  });
+});
+
+describe("runtime.ts — Invariant 13 (no framework imports)", () => {
+  // Spec Invariant 13: "No React or DOM imports — enforced by a test that
+  // reads the file content and asserts the import set." This is a permanent
+  // regression guard against anyone accidentally pulling react/react-dom/
+  // jsdom into core's framework-agnostic runtime module.
+  test("runtime.ts contains no imports from react, react-dom, or jsdom", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const runtimePath = path.join(
+      process.cwd(),
+      "packages/core/src/runtime.ts",
+    );
+    const content = await fs.readFile(runtimePath, "utf-8");
+    expect(content).not.toMatch(/from\s+["']react["']/);
+    expect(content).not.toMatch(/from\s+["']react-dom["']/);
+    expect(content).not.toMatch(/from\s+["']jsdom["']/);
+    expect(content).not.toMatch(/from\s+["']@json-ui\/react["']/);
+  });
 });

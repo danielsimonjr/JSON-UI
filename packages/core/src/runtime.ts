@@ -124,6 +124,11 @@ export function validateJSONValue(
     throw new InitialDataNotSerializableError(path, "WeakSet");
   if (value instanceof Promise)
     throw new InitialDataNotSerializableError(path, "Promise");
+  // URL has its own instanceof branch so the error message reads "URL" rather
+  // than falling through to the "URL (non-plain object)" generic path. This
+  // matches the Date/RegExp/Error/Map/Set error-message convention.
+  if (typeof URL !== "undefined" && value instanceof URL)
+    throw new InitialDataNotSerializableError(path, "URL");
   if (value instanceof ArrayBuffer)
     throw new InitialDataNotSerializableError(path, "ArrayBuffer");
   // SharedArrayBuffer is a separate global; instanceof ArrayBuffer returns false
@@ -271,13 +276,19 @@ export interface ObservableDataModel {
 
 /**
  * Internal helper: get a value at a `/`-separated path from a nested object.
+ * Returns `undefined` for the empty path — callers that want the whole state
+ * should use `snapshot()`, which returns an identity-stable immutable view.
+ * Returning `root` here would hand callers a reference to the live mutable
+ * internal store, letting them bypass `invalidateAndNotify()` and break
+ * React's `useSyncExternalStore` tearing protection.
  */
 function getAtPath(
   root: Record<string, JSONValue>,
   path: string,
 ): JSONValue | undefined {
-  if (path === "") return root;
+  if (path === "") return undefined;
   const parts = path.split("/").filter((p) => p.length > 0);
+  if (parts.length === 0) return undefined;
   let current: JSONValue | undefined = root;
   for (const part of parts) {
     if (
@@ -295,15 +306,18 @@ function getAtPath(
 
 /**
  * Internal helper: set a value at a `/`-separated path, creating intermediate
- * plain objects as needed. Mutates `root` in place.
+ * plain objects as needed. Mutates `root` in place. Returns `true` if a value
+ * was written, `false` if the path was empty (no-op). The boolean return lets
+ * the caller skip `invalidateAndNotify()` for no-op writes so subscribers are
+ * not fired for mutations that never happened.
  */
 function setAtPath(
   root: Record<string, JSONValue>,
   path: string,
   value: JSONValue,
-): void {
+): boolean {
   const parts = path.split("/").filter((p) => p.length > 0);
-  if (parts.length === 0) return;
+  if (parts.length === 0) return false;
   let current: Record<string, JSONValue> = root;
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i]!;
@@ -322,6 +336,7 @@ function setAtPath(
     }
   }
   current[parts[parts.length - 1]!] = value;
+  return true;
 }
 
 /**
@@ -387,8 +402,12 @@ export function createObservableDataModel(
       return getAtPath(root, path);
     },
     set(path, value) {
-      setAtPath(root, path, value);
-      invalidateAndNotify();
+      // Mirror the delete() pattern: only notify subscribers if the path
+      // helper actually wrote something. Empty paths are a no-op that must
+      // not fire spurious notifications or invalidate the snapshot cache.
+      if (setAtPath(root, path, value)) {
+        invalidateAndNotify();
+      }
     },
     delete(path) {
       if (deleteAtPath(root, path)) {
