@@ -136,4 +136,83 @@ describe("createHeadlessContext", () => {
     expect(result.valid).toBe(false);
     expect(result.errors[0]?.message).toBe("Required");
   });
+
+  it("resolveAction pulls staging-only field IDs from the staging buffer", () => {
+    // Same staging-first-for-single-segment rule as resolveDynamic: a
+    // catalog action whose params reference {path: "email"} must resolve
+    // against the staging buffer, not against the data model (which is
+    // what core's resolveAction would do alone).
+    const buf = createStagingBuffer();
+    buf.set("email", "alice@example.com");
+    const ctx = createHeadlessContext({
+      staging: buf,
+      data: createObservableDataModel({}),
+    });
+    const norm = ctx.resolveAction({
+      name: "send_welcome",
+      params: { to: { path: "email" }, subject: "Hi" },
+    });
+    expect(norm.params).toEqual({
+      to: "alice@example.com",
+      subject: "Hi",
+    });
+  });
+
+  it("resolveAction preserves confirm.variant on the NormalizedAction", () => {
+    // confirm.variant distinguishes "default" vs "danger" confirmation
+    // dialogs. Core passes it through in ResolvedAction.confirm and the
+    // NormalizedAction type carries it, but the runtime copy in
+    // resolveAction previously dropped everything except title/message.
+    const ctx = createHeadlessContext({
+      staging: createStagingBuffer(),
+      data: createObservableDataModel({}),
+    });
+    const norm = ctx.resolveAction({
+      name: "delete_account",
+      params: {},
+      confirm: {
+        title: "Are you sure?",
+        message: "This cannot be undone.",
+        variant: "danger",
+      },
+    });
+    expect(norm.confirm).toEqual({
+      title: "Are you sure?",
+      message: "This cannot be undone.",
+      variant: "danger",
+    });
+  });
+
+  it("staging view reads from a frozen snapshot captured at construction (Invariant 15)", () => {
+    // The context is constructed once per render pass. Any write through
+    // the live StagingBuffer AFTER construction must not leak into the
+    // view — otherwise a hook callback that writes mid-render would
+    // corrupt later elements in the same pass.
+    const buf = createStagingBuffer();
+    buf.set("v", "pass-start");
+    const ctx = createHeadlessContext({
+      staging: buf,
+      data: createObservableDataModel({}),
+    });
+    expect(ctx.staging.get("v")).toBe("pass-start");
+    // Mutate the live buffer after the context was built.
+    buf.set("v", "mid-pass");
+    buf.set("extra", "also-mid-pass");
+    // The view still reports the pass-start snapshot.
+    expect(ctx.staging.get("v")).toBe("pass-start");
+    expect(ctx.staging.has("extra")).toBe(false);
+    expect(ctx.staging.snapshot()).toEqual({ v: "pass-start" });
+  });
+
+  it("data view reads from a frozen snapshot captured at construction (Invariant 15)", () => {
+    const data = createObservableDataModel({ user: { name: "start" } });
+    const ctx = createHeadlessContext({
+      staging: createStagingBuffer(),
+      data,
+    });
+    expect(ctx.data.get("user/name")).toBe("start");
+    data.set("user/name", "changed");
+    expect(ctx.data.get("user/name")).toBe("start");
+    expect(ctx.data.snapshot()).toEqual({ user: { name: "start" } });
+  });
 });

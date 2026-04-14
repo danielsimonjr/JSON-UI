@@ -75,8 +75,10 @@ function walkCause(
 
 /**
  * Convert any thrown value into a SerializableError. Walks the cause chain up
- * to MAX_CAUSE_DEPTH (8) levels and coerces non-Error throwables to
- * `{name: "UnknownError", message: String(value)}`.
+ * to `MAX_CAUSE_DEPTH` (9) levels deep, counting the root as depth 0 and each
+ * nested `cause` as +1; deeper chains are truncated with a
+ * `CauseChainDepthLimitExceeded` sentinel. Non-`Error` throwables are coerced
+ * to `{name: "UnknownError", message: String(value)}`.
  */
 export function toSerializableError(
   error: unknown,

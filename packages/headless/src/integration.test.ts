@@ -256,9 +256,30 @@ describe("integration: dual-backend friendly headless session", () => {
 
     expect(captured.length).toBeGreaterThan(0);
     for (const entry of captured) {
+      // Invariant 11: every hook payload must survive a JSON round-trip
+      // DEEP-EQUAL to its original. Comparing the round-trip against the
+      // original (not against another round-trip) is what actually tests
+      // serializability — a `Date`, `Map`, `function`, `undefined`, or
+      // `BigInt` in the payload would differ after JSON.stringify/parse
+      // and fail this check.
       const round = JSON.parse(JSON.stringify(entry.payload));
-      expect(round).toEqual(JSON.parse(JSON.stringify(entry.payload)));
+      expect(round, `${entry.kind} payload must be JSON round-trip safe`).toEqual(
+        entry.payload,
+      );
     }
+  });
+
+  it("hook serializability assertion fires on a non-JSONValue payload (negative control)", () => {
+    // This test proves that the Invariant 11 assertion above is tight: it
+    // constructs a payload that contains a Date and verifies the same
+    // round-trip+toEqual pattern throws. Without this negative control, a
+    // future refactor could silently break the main assertion and no one
+    // would notice because every real payload happens to be JSON-safe.
+    const badPayload = { when: new Date("2026-04-14T00:00:00Z") };
+    const round = JSON.parse(JSON.stringify(badPayload));
+    expect(() => {
+      expect(round).toEqual(badPayload);
+    }).toThrow();
   });
 
   it("zero React imports across every source file", async () => {

@@ -2,7 +2,7 @@ import {
   evaluateVisibility as coreEvaluateVisibility,
   runValidation as coreRunValidation,
   resolveAction as coreResolveAction,
-  resolveDynamicValue,
+  getByPath,
   type Action,
   type AuthState,
   type FieldId,
@@ -75,23 +75,73 @@ function coerceToJSONValue(value: unknown): JSONValue {
       return out;
     }
     default:
+      // undefined/function/symbol/bigint → null. Intentional: a missing
+      // staging field (undefined) collapses to null in resolved params so
+      // downstream JSON serializers do not drop the key.
       return null;
   }
 }
 
+/**
+ * Build a staging view bound to a FROZEN snapshot captured at construction
+ * time. This is what makes render passes pure on shared stores (Invariant 15):
+ * even if a hook callback writes through the live `StagingBuffer` mid-render,
+ * later elements in the same pass continue reading from the pass-start
+ * snapshot.
+ */
 function makeStagingView(buf: StagingBuffer): ReadonlyStagingView {
+  const frozen: StagingSnapshot = buf.snapshot();
   return {
-    get: (id) => buf.get(id),
-    has: (id) => buf.has(id),
-    snapshot: () => buf.snapshot(),
+    get: (id) => frozen[id],
+    has: (id) => Object.prototype.hasOwnProperty.call(frozen, id),
+    snapshot: () => frozen,
   };
 }
 
+/**
+ * Build a data view bound to a FROZEN snapshot captured at construction time.
+ * See `makeStagingView` for the Invariant 15 rationale.
+ */
 function makeDataView(data: ObservableDataModel): ReadonlyDataView {
+  const frozen = data.snapshot() as Record<string, JSONValue>;
   return {
-    get: (path) => data.get(path),
-    snapshot: () => data.snapshot(),
+    get: (path) => {
+      const raw = getByPath(frozen, path);
+      return raw === undefined ? undefined : (raw as JSONValue);
+    },
+    snapshot: () => frozen,
   };
+}
+
+/**
+ * Resolve a `{path: string}` DynamicValue literal against a pass-start
+ * snapshot pair using the staging-first-for-single-segment-ids rule that
+ * the repo documents in CLAUDE.md. Returns `undefined` for a miss; callers
+ * decide how to coerce.
+ */
+function resolveDynamicPath(
+  path: string,
+  staging: ReadonlyStagingView,
+  data: ReadonlyDataView,
+): unknown {
+  // Staging is keyed by flat field IDs (no slashes). A single-segment path
+  // that exists in staging wins; everything else falls through to data.
+  if (!path.includes("/") && staging.has(path)) {
+    return staging.get(path);
+  }
+  return getByPath(data.snapshot(), path);
+}
+
+function isDynamicPathLiteral(
+  value: unknown,
+): value is { path: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "path" in (value as Record<string, unknown>) &&
+    typeof (value as { path: unknown }).path === "string"
+  );
 }
 
 export function createHeadlessContext(
@@ -100,46 +150,27 @@ export function createHeadlessContext(
   const stagingView = makeStagingView(input.staging);
   const dataView = makeDataView(input.data);
 
+  const resolveDynamic = (
+    params: Record<string, unknown>,
+  ): Record<string, JSONValue> => {
+    const out: Record<string, JSONValue> = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (isDynamicPathLiteral(value)) {
+        out[key] = coerceToJSONValue(
+          resolveDynamicPath(value.path, stagingView, dataView),
+        );
+        continue;
+      }
+      out[key] = coerceToJSONValue(value);
+    }
+    return out;
+  };
+
   return {
     staging: stagingView,
     data: dataView,
 
-    resolveDynamic(params) {
-      // Spec requires substitution against BOTH data and staging. A
-      // catalog button's action params may reference a staging field
-      // ({path: "email"}) OR a data path ({path: "user/profile/name"}).
-      // Core's `resolveDynamicValue(value, dataModel)` only consults a
-      // single source, so we resolve `{path}` literals here directly,
-      // checking staging first (single-segment field IDs always live
-      // there) and falling back to the data model for dotted/slashed
-      // paths. Non-DynamicValue entries pass through coerceToJSONValue.
-      const out: Record<string, JSONValue> = {};
-      for (const [key, value] of Object.entries(params)) {
-        if (
-          value !== null &&
-          typeof value === "object" &&
-          !Array.isArray(value) &&
-          "path" in value &&
-          typeof (value as { path: unknown }).path === "string"
-        ) {
-          const path = (value as { path: string }).path;
-          // Staging is keyed by flat field IDs (no slashes). If the path is
-          // single-segment AND staging has it, prefer staging.
-          if (!path.includes("/") && stagingView.has(path)) {
-            out[key] = coerceToJSONValue(stagingView.get(path));
-            continue;
-          }
-          // Otherwise resolve against the data model via core's helper.
-          out[key] = coerceToJSONValue(
-            resolveDynamicValue(value as never, dataView.snapshot() as never),
-          );
-          continue;
-        }
-        // Literal: coerce and pass through.
-        out[key] = coerceToJSONValue(value);
-      }
-      return out;
-    },
+    resolveDynamic,
 
     evaluateVisibility(condition) {
       if (condition === undefined) return true;
@@ -165,23 +196,40 @@ export function createHeadlessContext(
     },
 
     resolveAction(action) {
+      // Core's resolveAction only consults the data model, so it silently
+      // drops any staging-only field IDs referenced as `{path: "email"}`.
+      // We call core for the auth/confirm/name shape, then re-resolve the
+      // params locally using the staging-first rule so the NormalizedAction
+      // the LLM Observer sees matches what dispatch would actually send.
       const resolved = coreResolveAction(
         action,
         dataView.snapshot() as Record<string, unknown>,
       );
       const params: Record<string, JSONValue> = {};
-      for (const [key, value] of Object.entries(resolved.params)) {
-        params[key] = coerceToJSONValue(value);
+      for (const [key, rawValue] of Object.entries(action.params ?? {})) {
+        if (isDynamicPathLiteral(rawValue)) {
+          params[key] = coerceToJSONValue(
+            resolveDynamicPath(rawValue.path, stagingView, dataView),
+          );
+        } else {
+          // Fall back to core's resolved value for literal/non-path entries
+          // so we keep any upstream transformations (e.g., function params).
+          params[key] = coerceToJSONValue(resolved.params[key]);
+        }
       }
       const out: NormalizedAction = {
         name: resolved.name,
         params,
       };
       if (resolved.confirm) {
-        out.confirm = {
+        const confirm: NormalizedAction["confirm"] = {
           title: resolved.confirm.title,
           message: resolved.confirm.message,
         };
+        if (resolved.confirm.variant !== undefined) {
+          confirm.variant = resolved.confirm.variant;
+        }
+        out.confirm = confirm;
       }
       return out;
     },

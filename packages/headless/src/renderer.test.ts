@@ -12,6 +12,7 @@ import { type HeadlessRegistry } from "./registry";
 
 const textCatalog = createCatalog({
   components: {
+    Container: { props: z.object({}) },
     Text: { props: z.object({ content: z.string() }) },
     TextField: { props: z.object({ id: z.string(), label: z.string() }) },
     Button: { props: z.object({ label: z.string() }) },
@@ -22,6 +23,13 @@ const textCatalog = createCatalog({
 });
 
 const textRegistry: HeadlessRegistry = {
+  Container: (el, _ctx, children) => ({
+    key: el.key,
+    type: "Container",
+    props: {},
+    children,
+    meta: { visible: true },
+  }),
   Text: (el) => ({
     key: el.key,
     type: "Text",
@@ -81,7 +89,7 @@ describe("createHeadlessRenderer", () => {
     expect(b).toEqual(a);
   });
 
-  it("each render pass captures a consistent state snapshot — Invariant 15", () => {
+  it("each render pass captures a consistent state snapshot — Invariant 15 (between passes)", () => {
     const staging = createStagingBuffer();
     staging.set("v", "first");
     const session = createHeadlessRenderer({
@@ -100,6 +108,53 @@ describe("createHeadlessRenderer", () => {
     const passB = session.render(tree);
     expect(passA.props.value).toBe("first");
     expect(passB.props.value).toBe("second");
+  });
+
+  it("mid-render staging writes do not leak into later elements of the same pass — Invariant 15 (within pass)", () => {
+    // The tighter reading of Invariant 15: if a hook callback (or any other
+    // code running during the render pass) mutates the shared staging
+    // buffer, the elements walked AFTER the mutation must still see the
+    // pass-start snapshot. The context binds its views to a frozen
+    // snapshot at pass-start construction, so this holds structurally.
+    const staging = createStagingBuffer();
+    staging.set("v", "pass-start");
+    const session = createHeadlessRenderer({
+      catalog: textCatalog,
+      registry: textRegistry,
+      staging,
+      // The onBeforeRender hook writes a new value to the live staging
+      // buffer after the pass has started (the context has already
+      // been constructed by that point).
+      hooks: {
+        onBeforeRender: () => {
+          staging.set("v", "written-mid-pass");
+        },
+      },
+    });
+    const tree: UITree = {
+      root: "parent",
+      elements: {
+        parent: {
+          key: "parent",
+          type: "Container",
+          props: {},
+          children: ["child"],
+        },
+        child: {
+          key: "child",
+          type: "TextField",
+          props: { id: "v", label: "X" },
+        },
+      },
+    };
+    const result = session.render(tree);
+    // The child walked AFTER onBeforeRender fired. If the view were live,
+    // it would now report "written-mid-pass". The frozen-snapshot view
+    // keeps the pass-start value.
+    expect(result.children[0]?.props.value).toBe("pass-start");
+    // The live buffer did accept the write — this is not about
+    // preventing the write, just about pass isolation.
+    expect(staging.get("v")).toBe("written-mid-pass");
   });
 
   it("creates its own staging and data when none are provided", () => {

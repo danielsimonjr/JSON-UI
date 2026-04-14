@@ -118,7 +118,10 @@ describe("SerializableError JSON round-trip", () => {
     const outer = new Error("outer", { cause: inner });
     const s = toSerializableError(outer, "walk");
     const round = JSON.parse(JSON.stringify(s));
-    expect(round).toEqual(JSON.parse(JSON.stringify(s)));
+    // Compare the round-trip to the ORIGINAL, not to another round-trip:
+    // comparing round to round is a tautology that passes even if the
+    // payload contained Date, Map, function, etc.
+    expect(round).toEqual(s);
     expect(round.message).toBe("outer");
     expect(round.cause.message).toBe("inner");
   });

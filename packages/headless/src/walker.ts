@@ -104,13 +104,16 @@ export function walkTree(input: WalkInput): NormalizedNode {
   if (rootResult === undefined) {
     // Root was either invisible or missing. Return an empty placeholder so
     // callers always get a NormalizedNode (the renderer's onAfterRender hook
-    // requires a result object). Use the root key for traceability.
+    // requires a result object). Use the distinct `"Empty"` type so callers
+    // can detect the placeholder; `meta.visible` remains `true` because the
+    // spec requires every emitted node to have `meta.visible === true`
+    // (pruned nodes are ABSENT from output, not flagged).
     return {
       key: tree.root,
       type: "Empty",
       props: {},
       children: [],
-      meta: { visible: false },
+      meta: { visible: true },
     };
   }
   return rootResult;

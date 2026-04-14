@@ -12,7 +12,7 @@ import {
   type ValidationFunction,
 } from "@json-ui/core";
 import { OptionConflictError, SessionDestroyedError } from "./errors";
-import { composeHooks, noopHooks, type RenderHooks } from "./hooks";
+import { composeHooks, type RenderHooks } from "./hooks";
 import { createHeadlessContext } from "./context";
 import { type HeadlessRegistry } from "./registry";
 import { walkTree } from "./walker";
@@ -160,9 +160,12 @@ export function createHeadlessRenderer(
     },
 
     destroy() {
+      // Flag-based: every public method calls ensureAlive() first, which
+      // throws once destroyed === true. The hooks object itself is never
+      // mutated — that was correctness-by-accident and broke if the
+      // composed hooks were frozen.
       if (destroyed) return;
       destroyed = true;
-      Object.assign(hooks, noopHooks);
     },
   };
 }
