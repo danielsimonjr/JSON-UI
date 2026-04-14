@@ -185,7 +185,27 @@ export function validateJSONValue(
  */
 export interface StagingBuffer {
   get(fieldId: FieldId): JSONValue | undefined;
+  /**
+   * Write a value and synchronously notify all subscribers before returning.
+   *
+   * **Type contract enforcement.** The `JSONValue` parameter type is the only
+   * guarantee that stored values are serializable. There is NO runtime
+   * validation on writes (only `createObservableDataModel`'s constructor
+   * validates `initialData`). Callers that bypass the type system via
+   * `as unknown` / `as never` and pass a disqualified value (function,
+   * Symbol, class instance, etc.) will successfully store the value, but
+   * downstream consumers that serialize the snapshot (e.g. via
+   * `JSON.stringify` or cross-process transport) may surface a delayed
+   * error. This is the caller's bug per the spec's design decision; the
+   * TypeScript type system IS the contract.
+   */
   set(fieldId: FieldId, value: JSONValue): void;
+  /**
+   * Remove a field and synchronously notify subscribers IF the field
+   * existed. Deleting an absent field is a no-op and does NOT fire
+   * subscriber callbacks — this prevents spurious React re-renders on
+   * `store.delete("maybe-there")` patterns.
+   */
   delete(fieldId: FieldId): void;
   has(fieldId: FieldId): boolean;
   snapshot(): StagingSnapshot;
@@ -267,8 +287,37 @@ export function createStagingBuffer(): StagingBuffer {
  * Same identity-stability and synchronous-notification contract as StagingBuffer.
  */
 export interface ObservableDataModel {
+  /**
+   * Get a value at a `/`-separated path. Returns `undefined` for missing
+   * paths AND for the empty path — callers that want the whole state
+   * should use `snapshot()`, which returns an immutable identity-stable
+   * view. `get("")` deliberately does NOT return the internal store.
+   */
   get(path: string): JSONValue | undefined;
+  /**
+   * Write a value at a path and synchronously notify subscribers.
+   *
+   * **Empty-path handling.** `set("", ...)` is a no-op and does NOT fire
+   * subscribers. Paths with no non-empty segments (e.g. `"/"`, `"///"`)
+   * are treated the same way.
+   *
+   * **Type contract enforcement.** As with `StagingBuffer.set`, the
+   * `JSONValue` parameter type is the only guarantee. No runtime
+   * validation on writes. If a caller bypasses the type system and
+   * passes a non-serializable value (function, Symbol, class instance),
+   * the value is stored successfully but the NEXT `snapshot()` call
+   * throws a `DataCloneError` from the internal `structuredClone` pass.
+   * This is a delayed crash mode documented in the spec; the
+   * TypeScript type is the contract. Validate untrusted input at the
+   * boundary (e.g. via `validateJSONValue`) before passing to `set`.
+   */
   set(path: string, value: JSONValue): void;
+  /**
+   * Remove a leaf at a `/`-separated path and synchronously notify
+   * subscribers IF the path existed. Deleting an absent path is a no-op
+   * and does NOT fire subscriber callbacks. Does not prune now-empty
+   * parent containers (per spec Open Question 2 — leave-empty semantics).
+   */
   delete(path: string): void;
   snapshot(): Readonly<Record<string, JSONValue>>;
   subscribe(callback: () => void): () => void;

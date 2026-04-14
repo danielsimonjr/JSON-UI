@@ -382,6 +382,78 @@ describe("createObservableDataModel - empty-path edge cases (review fix)", () =>
   });
 });
 
+describe("createStagingBuffer - delete of absent field", () => {
+  // The spec's delete() contract fires subscribers ONLY when a field was
+  // actually removed. Deleting a missing field is a no-op to prevent
+  // spurious React re-renders on defensive `store.delete("maybe-there")`
+  // patterns. This test locks in that behavior.
+  test("delete of absent field does NOT fire subscriber", () => {
+    const buf = createStagingBuffer();
+    let calls = 0;
+    buf.subscribe(() => {
+      calls++;
+    });
+    buf.delete("never-set");
+    expect(calls).toBe(0);
+  });
+  test("delete of absent field does NOT invalidate snapshot cache", () => {
+    const buf = createStagingBuffer();
+    buf.set("existing", "value");
+    const snap1 = buf.snapshot();
+    buf.delete("never-set");
+    const snap2 = buf.snapshot();
+    expect(snap1).toBe(snap2);
+  });
+  test("delete of present field DOES fire subscriber (regression guard)", () => {
+    // Negative control — proves the above absent-field tests mean something.
+    const buf = createStagingBuffer();
+    buf.set("x", 1);
+    let calls = 0;
+    buf.subscribe(() => {
+      calls++;
+    });
+    buf.delete("x");
+    expect(calls).toBe(1);
+  });
+});
+
+describe("createObservableDataModel - delete of absent path", () => {
+  test("delete of absent path does NOT fire subscriber", () => {
+    const m = createObservableDataModel({ user: { name: "Alice" } });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.delete("user/nonexistent");
+    expect(calls).toBe(0);
+  });
+  test("delete of absent path does NOT invalidate snapshot cache", () => {
+    const m = createObservableDataModel({ user: { name: "Alice" } });
+    const snap1 = m.snapshot();
+    m.delete("user/nonexistent");
+    const snap2 = m.snapshot();
+    expect(snap1).toBe(snap2);
+  });
+  test("delete of deeply nested absent path does NOT fire subscriber", () => {
+    const m = createObservableDataModel({ a: 1 });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.delete("a/b/c/d/e"); // traversal fails at `a` (a number, not an object)
+    expect(calls).toBe(0);
+  });
+  test("delete of present path DOES fire subscriber (regression guard)", () => {
+    const m = createObservableDataModel({ user: { name: "Alice" } });
+    let calls = 0;
+    m.subscribe(() => {
+      calls++;
+    });
+    m.delete("user/name");
+    expect(calls).toBe(1);
+  });
+});
+
 describe("createStagingBuffer - self-unsubscribe during notify", () => {
   // Spec "Set-during-notify is allowed" covers the general case; the
   // implementation uses Array.from(listeners.values()) to snapshot the
