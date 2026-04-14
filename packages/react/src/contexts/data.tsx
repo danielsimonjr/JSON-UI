@@ -13,6 +13,7 @@ import {
   setByPath,
   type DataModel,
   type AuthState,
+  type ObservableDataModel,
 } from "@json-ui/core";
 
 /**
@@ -37,19 +38,42 @@ const DataContext = createContext<DataContextValue | null>(null);
  * Props for DataProvider
  */
 export interface DataProviderProps {
-  /** Initial data model */
+  /** Initial data model. Ignored when `store` is provided. */
   initialData?: DataModel;
   /** Auth state */
   authState?: AuthState;
   /** Callback when data changes */
   onDataChange?: (path: string, value: unknown) => void;
+  /**
+   * Optional external observable data store. When provided, DataProvider binds
+   * to this store via `useSyncExternalStore` and all reads/writes flow through
+   * it. When absent, DataProvider falls back to its local `useState` behavior.
+   *
+   * The `store` reference should be stable across renders. Swapping which store
+   * DataProvider consumes mid-component-lifetime is not supported — unmount and
+   * remount the provider if you need to swap stores.
+   */
+  store?: ObservableDataModel;
   children: ReactNode;
 }
 
 /**
- * Provider for data model context
+ * Provider for data model context. Dispatches to either the internal
+ * useState-backed provider or the external-store provider based on whether
+ * `store` is defined. The split-component pattern is required by React's
+ * rules of hooks — each child component calls exactly one set of hooks.
  */
-export function DataProvider({
+export function DataProvider(props: DataProviderProps) {
+  if (props.store !== undefined) {
+    return <ExternalDataProvider {...props} store={props.store} />;
+  }
+  return <InternalDataProvider {...props} />;
+}
+
+/**
+ * Internal-mode provider — current useState-backed behavior, unchanged.
+ */
+function InternalDataProvider({
   initialData = {},
   authState,
   onDataChange,
@@ -86,17 +110,35 @@ export function DataProvider({
   );
 
   const value = useMemo<DataContextValue>(
-    () => ({
-      data,
-      authState,
-      get,
-      set,
-      update,
-    }),
+    () => ({ data, authState, get, set, update }),
     [data, authState, get, set, update],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+}
+
+/**
+ * External-mode provider — placeholder for now. Implemented in Task 4.
+ * Until then, this stub mirrors InternalDataProvider's behavior so the
+ * dispatcher always works.
+ */
+function ExternalDataProvider({
+  initialData = {},
+  authState,
+  onDataChange,
+  children,
+}: DataProviderProps & { store: ObservableDataModel }) {
+  // STUB: in Task 4, this will use useSyncExternalStore against the store.
+  // For now, fall back to internal behavior so the dispatcher compiles.
+  return (
+    <InternalDataProvider
+      initialData={initialData}
+      authState={authState}
+      onDataChange={onDataChange}
+    >
+      {children}
+    </InternalDataProvider>
+  );
 }
 
 /**
