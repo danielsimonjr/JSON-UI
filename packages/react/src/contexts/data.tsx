@@ -6,6 +6,7 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -118,27 +119,69 @@ function InternalDataProvider({
 }
 
 /**
- * External-mode provider — placeholder for now. Implemented in Task 4.
- * Until then, this stub mirrors InternalDataProvider's behavior so the
- * dispatcher always works.
+ * External-mode provider — binds to a shared ObservableDataModel via
+ * useSyncExternalStore. All reads come from the store snapshot; all writes
+ * go through store.set / store.delete and trigger subscribe notifications,
+ * which propagate to other backends sharing the same store reference.
+ *
+ * `initialData` is intentionally ignored in this mode — the store's current
+ * contents are always authoritative. This matches the spec's silent-ignore
+ * commitment (Open Question 1, resolved).
  */
 function ExternalDataProvider({
-  initialData = {},
   authState,
   onDataChange,
   children,
+  store,
 }: DataProviderProps & { store: ObservableDataModel }) {
-  // STUB: in Task 4, this will use useSyncExternalStore against the store.
-  // For now, fall back to internal behavior so the dispatcher compiles.
-  return (
-    <InternalDataProvider
-      initialData={initialData}
-      authState={authState}
-      onDataChange={onDataChange}
-    >
-      {children}
-    </InternalDataProvider>
+  // Note on bare method references: passing `store.subscribe` and
+  // `store.snapshot` as bare references is correct ONLY if Plan 1's
+  // `createObservableDataModel` is closure-based (no `this` dependency).
+  // Plan 1 IS closure-based — the factory returns an object literal whose
+  // methods close over the local `root`/`listeners`/`cachedSnapshot`. So
+  // bare references are safe. If a future replacement uses a class with
+  // `this`-bound methods, wrap with `.bind(store)` here defensively.
+  const data = useSyncExternalStore(
+    store.subscribe,
+    store.snapshot,
+    store.snapshot, // SSR snapshot — same as client snapshot for non-SSR use
+  ) as DataModel;
+
+  const get = useCallback((path: string) => store.get(path), [store]);
+
+  const set = useCallback(
+    (path: string, value: unknown) => {
+      // Cast: ObservableDataModel.set accepts JSONValue; the existing
+      // DataContextValue.set takes `unknown` for backward compatibility.
+      // Callers passing non-JSONValue values are the caller's bug — the
+      // store's own internal validation does NOT re-run on every set
+      // (per the runtime-types spec's "validates once at construction").
+      store.set(path, value as never);
+      onDataChange?.(path, value);
+    },
+    [store, onDataChange],
   );
+
+  const update = useCallback(
+    (updates: Record<string, unknown>) => {
+      // Each store.set fires a subscribe callback. This produces multiple
+      // re-renders for a multi-key update — strictly worse than the internal
+      // mode's single setState. A future ObservableDataModel.batch() method
+      // could fix this. Out of scope for v1.
+      for (const [path, value] of Object.entries(updates)) {
+        store.set(path, value as never);
+        onDataChange?.(path, value);
+      }
+    },
+    [store, onDataChange],
+  );
+
+  const value = useMemo<DataContextValue>(
+    () => ({ data, authState, get, set, update }),
+    [data, authState, get, set, update],
+  );
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 /**
