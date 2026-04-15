@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { UITree } from "@json-ui/core";
-import { collectFieldIds } from "./collect-ids";
+import type { UITree } from "./types";
+import { collectFieldIds } from "./collect-field-ids";
 
 describe("collectFieldIds", () => {
   it("returns an empty set for a tree with no input components", () => {
@@ -55,7 +55,20 @@ describe("collectFieldIds", () => {
     expect(collectFieldIds(tree)).toEqual(new Set<string>());
   });
 
+  it("ignores empty-string id props", () => {
+    const tree: UITree = {
+      root: "r",
+      elements: {
+        r: { key: "r", type: "TextField", props: { id: "" } },
+      },
+    };
+    expect(collectFieldIds(tree)).toEqual(new Set<string>());
+  });
+
   it("treats duplicate ids as one entry in the set", () => {
+    // Duplicate detection is NOT this helper's job — see validateUniqueFieldIds.
+    // collectFieldIds just produces the liveIds set for reconciliation, and a
+    // set collapses duplicates naturally.
     const tree: UITree = {
       root: "root",
       elements: {

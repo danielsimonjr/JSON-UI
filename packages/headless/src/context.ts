@@ -1,8 +1,10 @@
 import {
   evaluateVisibility as coreEvaluateVisibility,
   runValidation as coreRunValidation,
-  resolveAction as coreResolveAction,
   getByPath,
+  isDynamicPathLiteral,
+  resolveStagingOrDataPath,
+  resolveActionWithStaging,
   type Action,
   type AuthState,
   type FieldId,
@@ -114,34 +116,21 @@ function makeDataView(data: ObservableDataModel): ReadonlyDataView {
 }
 
 /**
- * Resolve a `{path: string}` DynamicValue literal against a pass-start
- * snapshot pair using the staging-first-for-single-segment-ids rule that
- * the repo documents in CLAUDE.md. Returns `undefined` for a miss; callers
- * decide how to coerce.
+ * Resolve a `{path: string}` DynamicValue literal against the pass-start
+ * snapshot pair. Thin adapter over core's `resolveStagingOrDataPath` that
+ * takes the `ReadonlyStagingView` / `ReadonlyDataView` shapes the headless
+ * package uses at its module boundary.
  */
 function resolveDynamicPath(
   path: string,
   staging: ReadonlyStagingView,
   data: ReadonlyDataView,
 ): unknown {
-  // Staging is keyed by flat field IDs (no slashes). A single-segment path
-  // that exists in staging wins; everything else falls through to data.
-  if (!path.includes("/") && staging.has(path)) {
-    return staging.get(path);
-  }
-  return getByPath(data.snapshot(), path);
-}
-
-function isDynamicPathLiteral(
-  value: unknown,
-): value is { path: string } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    "path" in (value as Record<string, unknown>) &&
-    typeof (value as { path: unknown }).path === "string"
-  );
+  // The core helper reads from a `StagingSnapshot` (plain dict) and a
+  // `DataModel`. Our views expose `.snapshot()` for each, so we pass
+  // frozen snapshots through — matching the "pass-start frozen view"
+  // invariant without having to re-export a view-shaped helper from core.
+  return resolveStagingOrDataPath(path, staging.snapshot(), data.snapshot());
 }
 
 export function createHeadlessContext(
@@ -196,26 +185,20 @@ export function createHeadlessContext(
     },
 
     resolveAction(action) {
-      // Core's resolveAction only consults the data model, so it silently
-      // drops any staging-only field IDs referenced as `{path: "email"}`.
-      // We call core for the auth/confirm/name shape, then re-resolve the
-      // params locally using the staging-first rule so the NormalizedAction
-      // the LLM Observer sees matches what dispatch would actually send.
-      const resolved = coreResolveAction(
+      // Delegate to the shared core helper. It implements the same
+      // staging-first-for-single-segment rule used by `resolveDynamic`,
+      // copies `confirm.variant` through explicitly, and interpolates
+      // `${path}` in confirm.title/message against the frozen data
+      // snapshot. That produces a `ResolvedAction`; we coerce its params
+      // to `JSONValue` for the NormalizedAction shape.
+      const resolved = resolveActionWithStaging(
         action,
+        stagingView.snapshot(),
         dataView.snapshot() as Record<string, unknown>,
       );
       const params: Record<string, JSONValue> = {};
-      for (const [key, rawValue] of Object.entries(action.params ?? {})) {
-        if (isDynamicPathLiteral(rawValue)) {
-          params[key] = coerceToJSONValue(
-            resolveDynamicPath(rawValue.path, stagingView, dataView),
-          );
-        } else {
-          // Fall back to core's resolved value for literal/non-path entries
-          // so we keep any upstream transformations (e.g., function params).
-          params[key] = coerceToJSONValue(resolved.params[key]);
-        }
+      for (const [key, value] of Object.entries(resolved.params)) {
+        params[key] = coerceToJSONValue(value);
       }
       const out: NormalizedAction = {
         name: resolved.name,

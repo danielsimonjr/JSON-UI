@@ -107,3 +107,24 @@ export {
   validateJSONValue,
   InitialDataNotSerializableError,
 } from "./runtime";
+
+// Field-ID helpers — used by consumers that bind `StagingBuffer` to a
+// rendered tree (the NC runtime, both React and headless renderer paths).
+export { collectFieldIds } from "./collect-field-ids";
+export {
+  validateUniqueFieldIds,
+  DuplicateFieldIdError,
+} from "./validate-field-ids";
+
+// Staging-aware resolution helpers — shared between `@json-ui/headless`
+// and the NC runtime's React path so there is exactly one implementation
+// of the "staging wins for single-segment paths, data wins otherwise"
+// rule across the repo. See `docs/specs/2026-04-13-headless-renderer-design.md`
+// (Invariant 3) and NC's own Invariant 11 in
+// `neural-computer/docs/specs/2026-04-11-ephemeral-ui-state-design.md`.
+export {
+  resolveStagingOrDataPath,
+  isDynamicPathLiteral,
+  preResolveDynamicParams,
+  resolveActionWithStaging,
+} from "./resolve-with-staging";
