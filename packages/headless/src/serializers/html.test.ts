@@ -52,6 +52,30 @@ describe("createHtmlSerializer", () => {
     expect(ser.serialize(node)).toBe('<div data-type="Mystery"></div>');
   });
 
+  it("default fallback escapes node.type so a malicious type cannot break out of the data-type attribute", () => {
+    // Component type names are LLM-emitted from the catalog. A type
+    // containing a `"` or `<` without escaping would close the attribute
+    // early and let attacker-controlled HTML leak into the output. The
+    // default fallback is explicitly a safety fallback, not a raw-HTML
+    // path — it always escapes node.type.
+    const ser = createHtmlSerializer({
+      emitters: {},
+    });
+    const node: NormalizedNode = {
+      key: "r",
+      type: 'Evil"><script>alert(1)</script>',
+      props: {},
+      children: [],
+    };
+    const out = ser.serialize(node);
+    // The escaped type ends up as text inside the attribute — no raw
+    // script tag, no attribute break.
+    expect(out).toContain(
+      "data-type=\"Evil&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;\"",
+    );
+    expect(out).not.toContain("<script>");
+  });
+
   it("supports a custom fallback", () => {
     const ser = createHtmlSerializer({
       emitters: {},

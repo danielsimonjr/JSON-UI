@@ -176,6 +176,28 @@ export interface JSONUIProviderProps {
     string,
     (params: Record<string, unknown>) => Promise<unknown> | unknown
   >;
+  /**
+   * Optional callback fired on every executed catalog action with a
+   * fully-formed `IntentEvent`. Forwarded to the nested `ActionProvider`.
+   * Set this to the NC orchestrator's intent handler so Button clicks,
+   * form submissions, etc. flush through to NC without needing per-action
+   * custom handlers.
+   *
+   * When `onIntent` is present, `actionHandlers` is optional — actions
+   * without a registered handler emit the intent without warning, and
+   * the orchestrator decides what to do. Actions WITH a registered
+   * handler fire both the handler (for local side effects) and the
+   * intent (for the orchestrator log).
+   */
+  onIntent?: (event: IntentEvent) => void;
+  /**
+   * Optional catalog version string threaded through every emitted
+   * `IntentEvent.catalog_version` field. Forwarded to the nested
+   * `ActionProvider`. Set from the NC catalog config so the orchestrator
+   * can validate that the LLM's tree emissions match the catalog
+   * version in effect at emission time.
+   */
+  catalogVersion?: string;
   /** Navigation function */
   navigate?: (path: string) => void;
   /** Custom validation functions */
@@ -190,6 +212,7 @@ export interface JSONUIProviderProps {
 
 // Import the providers
 import type {
+  IntentEvent,
   ObservableDataModel,
   StagingBuffer,
 } from "@json-ui/core";
@@ -211,6 +234,8 @@ export function JSONUIProvider({
   stagingStore,
   authState,
   actionHandlers,
+  onIntent,
+  catalogVersion,
   navigate,
   validationFunctions,
   onDataChange,
@@ -235,7 +260,19 @@ export function JSONUIProvider({
       onDataChange={onDataChange}
     >
       <VisibilityProvider>
-        <ActionProvider handlers={actionHandlers} navigate={navigate}>
+        <ActionProvider
+          handlers={actionHandlers}
+          navigate={navigate}
+          // Pass the same `stagingStore` reference to ActionProvider as
+          // the `staging` prop so action resolution is staging-aware
+          // (resolveActionWithStaging) AND IntentEvent payloads capture
+          // a full staging snapshot. When stagingStore is undefined,
+          // ActionProvider falls back to core's resolveAction without
+          // staging, which is the original pre-NC behavior.
+          staging={stagingStore}
+          onIntent={onIntent}
+          catalogVersion={catalogVersion}
+        >
           <ValidationProvider customFunctions={validationFunctions}>
             {stagedChildren}
             <ConfirmationDialogManager />

@@ -116,6 +116,103 @@ describe("createCatalog", () => {
 
     expect(catalog.name).toBe("MyCatalog");
   });
+
+  it("validateTree rejects a tree with duplicate field IDs (NC Invariant 8)", () => {
+    // Field-ID uniqueness is a catalog-level guarantee for the Neural
+    // Computer runtime's staging-buffer reconciliation. Two input
+    // components sharing the same `id` would cause last-write-wins
+    // corruption of the buffer. validateTree must catch this before
+    // the tree is committed.
+    const catalog = createCatalog({
+      components: {
+        TextField: {
+          props: z.object({ id: z.string(), label: z.string() }),
+        },
+      },
+    });
+
+    const treeWithDuplicates = {
+      root: "root",
+      elements: {
+        root: {
+          key: "root",
+          type: "TextField",
+          props: { id: "email", label: "Primary" },
+        },
+        // second element reusing the same id but a different element key
+        other: {
+          key: "other",
+          type: "TextField",
+          props: { id: "email", label: "Secondary" },
+        },
+      },
+    };
+
+    const result = catalog.validateTree(treeWithDuplicates);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeUndefined(); // Zod succeeded, only uniqueness failed
+    expect(result.fieldIdError).toBeDefined();
+    expect(result.fieldIdError?.fieldId).toBe("email");
+    expect(result.fieldIdError?.name).toBe("DuplicateFieldIdError");
+    // Element keys of the two colliding elements are both named.
+    expect(result.fieldIdError?.firstElementKey).toBe("root");
+    expect(result.fieldIdError?.secondElementKey).toBe("other");
+  });
+
+  it("validateTree still surfaces Zod failures on malformed trees", () => {
+    // Sanity check: the new uniqueness check doesn't shadow Zod-level
+    // structural errors. If Zod parse fails, error is the ZodError and
+    // fieldIdError is undefined (we bailed before the uniqueness pass).
+    const catalog = createCatalog({
+      components: {
+        TextField: {
+          props: z.object({ id: z.string(), label: z.string() }),
+        },
+      },
+    });
+
+    const treeWithBadProps = {
+      root: "r",
+      elements: {
+        r: {
+          key: "r",
+          type: "TextField",
+          // missing `label`, so Zod parse of the props schema fails
+          props: { id: "email" },
+        },
+      },
+    };
+
+    const result = catalog.validateTree(treeWithBadProps);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.fieldIdError).toBeUndefined();
+  });
+
+  it("validateTree is a no-op uniqueness check for catalogs without id props", () => {
+    // Non-input catalogs (display-only) should see zero overhead and
+    // always pass the uniqueness pass. The walker looks only at
+    // string-typed id props and returns an empty set for display
+    // components.
+    const catalog = createCatalog({
+      components: {
+        Text: { props: z.object({ content: z.string() }) },
+      },
+    });
+
+    const validTree = {
+      root: "1",
+      elements: {
+        "1": { key: "1", type: "Text", props: { content: "hello" } },
+        "2": { key: "2", type: "Text", props: { content: "world" } },
+      },
+    };
+
+    const result = catalog.validateTree(validTree);
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.fieldIdError).toBeUndefined();
+  });
 });
 
 describe("generateCatalogPrompt", () => {

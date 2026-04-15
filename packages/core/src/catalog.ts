@@ -9,6 +9,10 @@ import type {
 import { VisibilityConditionSchema } from "./visibility";
 import { ActionSchema, type ActionDefinition } from "./actions";
 import { ValidationConfigSchema, type ValidationFunction } from "./validation";
+import {
+  validateUniqueFieldIds,
+  DuplicateFieldIdError,
+} from "./validate-field-ids";
 
 /**
  * Component definition with visibility and validation support
@@ -102,11 +106,39 @@ export interface Catalog<
     data?: UIElement;
     error?: z.ZodError;
   };
-  /** Validate a UI tree */
+  /**
+   * Validate a UI tree.
+   *
+   * Runs two checks in sequence:
+   *
+   * 1. **Zod schema validation** — the tree's element map and root key are
+   *    parsed against the catalog's generated schema. Any structural or
+   *    per-element prop-type failure produces `{success: false, error}`
+   *    where `error` is a `z.ZodError`.
+   *
+   * 2. **Field-ID uniqueness** — after a successful Zod parse, `validateTree`
+   *    walks the tree once via `validateUniqueFieldIds` and ensures every
+   *    non-empty string `id` prop is unique across the whole tree. If two
+   *    elements share an `id`, the result becomes
+   *    `{success: false, fieldIdError}` where `fieldIdError` is a
+   *    `DuplicateFieldIdError` naming the offending field ID and both
+   *    element keys that carry it.
+   *
+   * Callers that only want the Zod result can keep checking `error` alone;
+   * callers that need the Neural Computer's Invariant 8 (field-ID uniqueness
+   * enforced before the tree reaches the renderer) should check both
+   * `error` and `fieldIdError`, or simply treat `!success` as "skip
+   * reconciliation" as NC's plan Task 10 does.
+   *
+   * Non-input catalogs (no `id` props on any component) see the uniqueness
+   * pass as a no-op — the walker finds zero IDs and returns an empty set.
+   * There is no opt-out; the check is always safe.
+   */
   validateTree(tree: unknown): {
     success: boolean;
     data?: UITree;
     error?: z.ZodError;
+    fieldIdError?: DuplicateFieldIdError;
   };
 }
 
@@ -214,10 +246,22 @@ export function createCatalog<
 
     validateTree(tree: unknown) {
       const result = treeSchema.safeParse(tree);
-      if (result.success) {
-        return { success: true, data: result.data };
+      if (!result.success) {
+        return { success: false, error: result.error };
       }
-      return { success: false, error: result.error };
+      // Zod parse succeeded; now enforce field-ID uniqueness across the
+      // tree. validateUniqueFieldIds throws DuplicateFieldIdError on
+      // collision; we catch and convert to a structured failure result
+      // so callers don't have to try/catch around validateTree.
+      try {
+        validateUniqueFieldIds(result.data);
+      } catch (err) {
+        if (err instanceof DuplicateFieldIdError) {
+          return { success: false, fieldIdError: err };
+        }
+        throw err;
+      }
+      return { success: true, data: result.data };
     },
   };
 }

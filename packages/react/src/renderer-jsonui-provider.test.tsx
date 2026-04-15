@@ -1,13 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import {
   createObservableDataModel,
   createStagingBuffer,
+  type IntentEvent,
 } from "@json-ui/core";
 import { JSONUIProvider } from "./renderer";
 import { useData } from "./contexts/data";
 import { useStaging, useStagingField } from "./contexts/staging";
+import { useAction } from "./contexts/actions";
 
 // Minimal registry — JSONUIProvider requires it structurally but none of
 // these tests render catalog components, so an empty object is fine.
@@ -195,5 +197,51 @@ describe("JSONUIProvider — external store forwarding (NC Path C, G-R2)", () =>
     expect(result.current.staging.getField("email")).toBe(
       "carol@example.com",
     );
+  });
+
+  it("forwards onIntent + catalogVersion to ActionProvider so execute() emits a full IntentEvent", async () => {
+    // End-to-end Path C wiring check: NC passes `stagingStore`,
+    // `onIntent`, and `catalogVersion` to JSONUIProvider; the nested
+    // ActionProvider uses the same staging buffer to resolve params AND
+    // snapshot state, and fires onIntent with both. This replaces the
+    // ~20-line makeActionHandlers factory NC's plan Task 9 originally
+    // required.
+    const stagingStore = createStagingBuffer();
+    stagingStore.set("email", "dan@example.com");
+    const onIntent = vi.fn();
+
+    const { result } = renderHook(
+      () =>
+        useAction({
+          name: "submit_form",
+          params: { to: { path: "email" } }, // resolves via staging
+        }),
+      {
+        wrapper: ({ children }) => (
+          <JSONUIProvider
+            registry={registry}
+            stagingStore={stagingStore}
+            onIntent={onIntent}
+            catalogVersion="nc-starter-0.1"
+          >
+            {children}
+          </JSONUIProvider>
+        ),
+      },
+    );
+
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(onIntent).toHaveBeenCalledTimes(1);
+    const event = onIntent.mock.calls[0]![0] as IntentEvent;
+    expect(event.action_name).toBe("submit_form");
+    // DynamicValue `{path: "email"}` resolved against the shared buffer.
+    expect(event.action_params).toEqual({ to: "dan@example.com" });
+    // Full snapshot (not just referenced keys).
+    expect(event.staging_snapshot).toEqual({ email: "dan@example.com" });
+    // Catalog version threaded through.
+    expect(event.catalog_version).toBe("nc-starter-0.1");
   });
 });

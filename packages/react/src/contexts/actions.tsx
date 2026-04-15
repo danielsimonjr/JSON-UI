@@ -10,11 +10,15 @@ import React, {
 } from "react";
 import {
   resolveAction,
+  resolveActionWithStaging,
   executeAction,
   type Action,
   type ActionHandler,
   type ActionConfirm,
   type ResolvedAction,
+  type IntentEvent,
+  type JSONValue,
+  type StagingBuffer,
 } from "@json-ui/core";
 import { useData } from "./data";
 
@@ -62,6 +66,54 @@ export interface ActionProviderProps {
   handlers?: Record<string, ActionHandler>;
   /** Navigation function */
   navigate?: (path: string) => void;
+  /**
+   * Optional shared `StagingBuffer` for the Neural Computer runtime's
+   * Path C integration. When provided, `execute()`:
+   *
+   * 1. Resolves the action's `DynamicValue` params via
+   *    `resolveActionWithStaging(action, staging.snapshot(), data)` instead
+   *    of core's `resolveAction(action, data)`, so single-segment
+   *    `{path: "fieldId"}` literals pick up the user's in-progress input.
+   *
+   * 2. Captures `staging.snapshot()` at flush time for the `IntentEvent`'s
+   *    `staging_snapshot` field (see `onIntent`).
+   *
+   * When absent, `execute()` falls back to `resolveAction(action, data)`
+   * — the pre-NC behavior. Existing consumers that don't use staging see
+   * no change.
+   */
+  staging?: StagingBuffer;
+  /**
+   * Optional callback that fires synchronously on every executed action
+   * with a fully-formed `IntentEvent` payload. The NC runtime's orchestrator
+   * registers here to receive intents from catalog actions fired by
+   * Button clicks, form submissions, etc. without having to hand-roll a
+   * `makeActionHandlers` wrapper around the `handlers` prop.
+   *
+   * Firing order per intent:
+   *
+   * 1. Params are resolved (staging-aware if `staging` is set).
+   * 2. A confirm dialog, if declared, is shown and must be accepted.
+   *    Rejected confirms short-circuit and DO NOT fire `onIntent`.
+   * 3. `onIntent` fires with `{action_name, action_params, staging_snapshot,
+   *    catalog_version, timestamp}`.
+   * 4. The per-action handler (from `handlers`) runs, if one is registered.
+   *
+   * When `onIntent` is set, actions with no handler registered do NOT
+   * log the "No handler registered" warning — the expected shape is
+   * "handler-less actions flush through onIntent to the orchestrator."
+   * Actions that need local UI-only side effects (e.g., "scroll to top")
+   * still register a handler alongside.
+   */
+  onIntent?: (event: IntentEvent) => void;
+  /**
+   * Optional catalog version string threaded through every emitted
+   * `IntentEvent.catalog_version` field. Set by the NC runtime from
+   * its catalog config so the orchestrator can validate that the
+   * LLM's tree emissions match the catalog version in effect at
+   * emission time.
+   */
+  catalogVersion?: string;
   children: ReactNode;
 }
 
@@ -71,6 +123,9 @@ export interface ActionProviderProps {
 export function ActionProvider({
   handlers: initialHandlers = {},
   navigate,
+  staging,
+  onIntent,
+  catalogVersion,
   children,
 }: ActionProviderProps) {
   const { data, set } = useData();
@@ -87,22 +142,68 @@ export function ActionProvider({
     [],
   );
 
+  // Helper: emit an IntentEvent if an onIntent callback is registered.
+  // Captures a fresh staging snapshot each call so partial-stream / no-op
+  // scenarios do not leak stale data. The params come from the staging-
+  // aware resolved action, which already applied the staging-first rule
+  // for single-segment paths.
+  const emitIntent = useCallback(
+    (resolved: ResolvedAction) => {
+      if (!onIntent) return;
+      // Coerce ResolvedAction.params (Record<string, unknown>) to the
+      // Record<string, JSONValue> expected by IntentEvent.action_params.
+      // The rule is already enforced on the type system at
+      // StagingBuffer.set/ObservableDataModel.set, so this is a no-op
+      // cast; callers that bypassed the type system and stored non-JSON
+      // values are already in undefined-behavior territory per the
+      // type-contract-only-validation decision in runtime.ts.
+      const event: IntentEvent = {
+        action_name: resolved.name,
+        action_params: resolved.params as Record<string, JSONValue>,
+        staging_snapshot: staging ? staging.snapshot() : {},
+        timestamp: Date.now(),
+      };
+      if (catalogVersion !== undefined) {
+        event.catalog_version = catalogVersion;
+      }
+      onIntent(event);
+    },
+    [onIntent, staging, catalogVersion],
+  );
+
   const execute = useCallback(
     async (action: Action) => {
-      const resolved = resolveAction(action, data);
+      // Staging-aware resolution when a StagingBuffer is wired in.
+      // Falls back to core's resolveAction for non-NC consumers who
+      // do not pass `staging`. See ActionProviderProps.staging docstring
+      // for the staging-first-for-single-segment rule.
+      const resolved = staging
+        ? resolveActionWithStaging(action, staging.snapshot(), data)
+        : resolveAction(action, data);
       const handler = handlers[resolved.name];
 
-      if (!handler) {
+      // Policy: when onIntent is NOT set, a missing handler is a
+      // warning and we bail. When onIntent IS set, a missing handler is
+      // expected — the orchestrator takes the intent and decides what
+      // to do. The warning is suppressed and we fall through to the
+      // emit path below.
+      if (!handler && !onIntent) {
         console.warn(`No handler registered for action: ${resolved.name}`);
         return;
       }
 
-      // If confirmation is required, show dialog
+      // If confirmation is required, show the dialog and wait for
+      // the user to accept. Rejection short-circuits everything
+      // (no intent emission, no handler execution, no loading state).
       if (resolved.confirm) {
         return new Promise<void>((resolve, reject) => {
           setPendingConfirmation({
             action: resolved,
-            handler,
+            // The pending-confirmation shape requires a handler ref for
+            // the built-in ConfirmDialog's click path. When no handler
+            // is registered (intent-only flow), synthesize a no-op
+            // handler so the type shape is satisfied.
+            handler: handler ?? (async () => {}),
             resolve: () => {
               setPendingConfirmation(null);
               resolve();
@@ -113,6 +214,11 @@ export function ActionProvider({
             },
           });
         }).then(async () => {
+          // Emit AFTER the user accepts the confirm. Rejected confirms
+          // do not fire onIntent (the user's cancel is itself the
+          // signal that no intent happened).
+          emitIntent(resolved);
+          if (!handler) return;
           setLoadingActions((prev) => new Set(prev).add(resolved.name));
           try {
             await executeAction({
@@ -135,7 +241,10 @@ export function ActionProvider({
         });
       }
 
-      // Execute immediately
+      // No confirm — emit the intent immediately, then run the handler
+      // if one is registered.
+      emitIntent(resolved);
+      if (!handler) return;
       setLoadingActions((prev) => new Set(prev).add(resolved.name));
       try {
         await executeAction({
@@ -156,7 +265,7 @@ export function ActionProvider({
         });
       }
     },
-    [data, handlers, set, navigate],
+    [data, handlers, set, navigate, staging, onIntent, emitIntent],
   );
 
   const confirm = useCallback(() => {

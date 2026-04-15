@@ -20,9 +20,6 @@ export interface HtmlSerializerOptions {
   escapeText?: boolean;
 }
 
-const DEFAULT_FALLBACK: HtmlEmitter = (node, emitChildren) =>
-  `<div data-type="${node.type}">${emitChildren()}</div>`;
-
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
@@ -33,6 +30,16 @@ function escapeHtml(input: string): string {
 }
 
 const NO_ESCAPE: (s: string) => string = (s) => s;
+
+// Default fallback always escapes node.type defensively — component type
+// names come from the LLM-emitted catalog, so a malicious or typo'd type
+// containing `"` would break out of the data-type attribute without this
+// guard. The escape pass is a one-time per-node cost and is not
+// configurable via `escapeText: false` because this default is explicitly
+// a safety fallback. Callers who want raw HTML should provide their own
+// `fallback` emitter.
+const DEFAULT_FALLBACK: HtmlEmitter = (node, emitChildren) =>
+  `<div data-type="${escapeHtml(node.type)}">${emitChildren()}</div>`;
 
 export function createHtmlSerializer(
   options: HtmlSerializerOptions,
