@@ -36,6 +36,15 @@ export {
   type FieldValidationState,
 } from "./contexts/validation";
 
+export {
+  StagingProvider,
+  useStaging,
+  useStagingField,
+  useStagingSnapshot,
+  type StagingContextValue,
+  type StagingProviderProps,
+} from "./contexts/staging";
+
 // Renderer
 export {
   Renderer,
