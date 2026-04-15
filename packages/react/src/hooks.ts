@@ -87,6 +87,30 @@ export interface UseUIStreamOptions {
   onComplete?: (tree: UITree) => void;
   /** Callback on error */
   onError?: (error: Error) => void;
+  /**
+   * Commit mode for tree state updates.
+   *
+   * - `"streaming"` (default) — `setTree` fires on every parsed patch, so
+   *   consumers see the tree assemble in real time. This is the original
+   *   Vercel-style visual streaming behavior that existed before Plan 1 and
+   *   is the right choice for UIs that want to show the LLM's output
+   *   progressively. It is NOT safe for consumers that reconcile derived
+   *   state against `tree` identity on every change, because reconciling
+   *   against a partial tree can silently drop entries keyed on elements
+   *   that have not yet streamed in.
+   *
+   * - `"atomic"` — `setTree` fires ONCE, after the stream completes
+   *   successfully. During streaming, `tree` stays at its pre-stream value
+   *   (or `null` if no previous tree). On error or abort, `tree` is left
+   *   untouched. This is required by the Neural Computer runtime's
+   *   staging-buffer reconciliation (NC spec Invariant 9 — "reconciliation
+   *   runs only on successful tree commits, not on partial streams"). Any
+   *   consumer that runs `useEffect(() => reconcile(tree), [tree])` or a
+   *   similar identity-based derivation MUST use this mode.
+   *
+   * Defaults to `"streaming"` to preserve backward compatibility.
+   */
+  commitMode?: "streaming" | "atomic";
 }
 
 /**
@@ -112,6 +136,7 @@ export function useUIStream({
   api,
   onComplete,
   onError,
+  commitMode = "streaming",
 }: UseUIStreamOptions): UseUIStreamReturn {
   const [tree, setTree] = useState<UITree | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -138,7 +163,13 @@ export function useUIStream({
         previousTree && previousTree.root
           ? { ...previousTree, elements: { ...previousTree.elements } }
           : { root: "", elements: {} };
-      setTree(currentTree);
+      // In streaming mode, publish the initial (empty or previous) tree so
+      // consumers can render a baseline while patches arrive. In atomic
+      // mode, suppress all `setTree` calls until the stream is known-good
+      // — any identity-based reconciliation should only see the final
+      // committed tree, never an in-flight partial (NC Invariant 9).
+      const atomic = commitMode === "atomic";
+      if (!atomic) setTree(currentTree);
 
       try {
         const response = await fetch(api, {
@@ -178,7 +209,7 @@ export function useUIStream({
             const patch = parsePatchLine(line);
             if (patch) {
               currentTree = applyPatch(currentTree, patch);
-              setTree({ ...currentTree });
+              if (!atomic) setTree({ ...currentTree });
             }
           }
         }
@@ -188,10 +219,15 @@ export function useUIStream({
           const patch = parsePatchLine(buffer);
           if (patch) {
             currentTree = applyPatch(currentTree, patch);
-            setTree({ ...currentTree });
+            if (!atomic) setTree({ ...currentTree });
           }
         }
 
+        // Atomic mode: commit the fully-assembled tree to state exactly
+        // once, right before firing onComplete. A consumer's useEffect on
+        // [tree] will fire once with the final, validated tree — never
+        // with a partial.
+        if (atomic) setTree({ ...currentTree });
         onComplete?.(currentTree);
       } catch (err) {
         if ((err as Error).name === "AbortError") {
@@ -204,7 +240,7 @@ export function useUIStream({
         setIsStreaming(false);
       }
     },
-    [api, onComplete, onError],
+    [api, onComplete, onError, commitMode],
   );
 
   // Cleanup on unmount

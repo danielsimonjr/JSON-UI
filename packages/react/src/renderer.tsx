@@ -139,8 +139,36 @@ export function Renderer({ tree, registry, loading, fallback }: RendererProps) {
 export interface JSONUIProviderProps {
   /** Component registry */
   registry: ComponentRegistry;
-  /** Initial data model */
+  /** Initial data model — ignored when `store` is provided. */
   initialData?: Record<string, unknown>;
+  /**
+   * Optional external `ObservableDataModel` to back the nested
+   * `DataProvider` in external-store mode. When provided, reads and
+   * writes flow through the store via `useSyncExternalStore`, and
+   * `initialData` is silently ignored. The Neural Computer runtime's
+   * "Path C" integration passes a memoryjs-backed adapter here so the
+   * React renderer and a parallel headless-renderer session can share
+   * one durable-state source.
+   *
+   * Without this prop, the nested `DataProvider` runs in its original
+   * `useState`-based internal mode, preserving backward compatibility
+   * with every existing caller.
+   */
+  store?: ObservableDataModel;
+  /**
+   * Optional external `StagingBuffer` to mount via `StagingProvider`
+   * inside the provider tree. When provided, the `useStaging` /
+   * `useStagingField` / `useStagingSnapshot` hooks work anywhere below
+   * this boundary without the caller having to hand-mount a separate
+   * `StagingProvider`. NC's Path C integration passes a buffer that is
+   * ALSO consumed by a headless renderer session running for the LLM
+   * Observer, so both backends see each other's writes.
+   *
+   * When absent, no `StagingProvider` is mounted; `useStaging()` will
+   * throw if called. Existing callers that don't need staging see no
+   * change.
+   */
+  stagingStore?: StagingBuffer;
   /** Auth state */
   authState?: { isSignedIn: boolean; user?: Record<string, unknown> };
   /** Action handlers */
@@ -161,18 +189,26 @@ export interface JSONUIProviderProps {
 }
 
 // Import the providers
+import type {
+  ObservableDataModel,
+  StagingBuffer,
+} from "@json-ui/core";
 import { DataProvider } from "./contexts/data";
+import { StagingProvider } from "./contexts/staging";
 import { VisibilityProvider } from "./contexts/visibility";
 import { ActionProvider } from "./contexts/actions";
 import { ValidationProvider } from "./contexts/validation";
 import { ConfirmDialog } from "./contexts/actions";
 
 /**
- * Combined provider for all JSONUI contexts
+ * Combined provider for all JSONUI contexts. See `JSONUIProviderProps`
+ * for the `store` and `stagingStore` props added for NC Path C.
  */
 export function JSONUIProvider({
   registry,
   initialData,
+  store,
+  stagingStore,
   authState,
   actionHandlers,
   navigate,
@@ -180,16 +216,28 @@ export function JSONUIProvider({
   onDataChange,
   children,
 }: JSONUIProviderProps) {
+  // Wrap in StagingProvider inside the inner subtree only when the
+  // caller supplied a buffer. Mounting StagingProvider unconditionally
+  // would silently create a disposable buffer that no one else shares,
+  // masking wiring mistakes; an explicit opt-in is safer.
+  const stagedChildren =
+    stagingStore !== undefined ? (
+      <StagingProvider store={stagingStore}>{children}</StagingProvider>
+    ) : (
+      children
+    );
+
   return (
     <DataProvider
       initialData={initialData}
+      store={store}
       authState={authState}
       onDataChange={onDataChange}
     >
       <VisibilityProvider>
         <ActionProvider handlers={actionHandlers} navigate={navigate}>
           <ValidationProvider customFunctions={validationFunctions}>
-            {children}
+            {stagedChildren}
             <ConfirmationDialogManager />
           </ValidationProvider>
         </ActionProvider>
