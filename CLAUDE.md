@@ -12,11 +12,11 @@ Upstream lineage: `vercel-labs/json-render` → `danielsimonjr/JSON-UI`. We are 
 
 npm workspaces monorepo. Three packages under `packages/`:
 
-| Package             | Purpose                                                                                                                    | Status                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `@json-ui/core`     | Framework-agnostic Zod catalog, types, visibility, validation, actions. The only runtime dependency is `zod`.              | Live                                                            |
-| `@json-ui/react`    | React 19 renderer with `DataProvider`, `ActionProvider`, `ValidationProvider`, `VisibilityProvider`. Peer dep on React 19. | Live                                                            |
-| `@json-ui/headless` | Framework-agnostic renderer that produces a `NormalizedNode` tree for the LLM Observer Layer.                              | Planned (see `docs/plans/2026-04-13-headless-renderer-plan.md`) |
+| Package             | Purpose                                                                                                                                             | Status |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `@json-ui/core`     | Framework-agnostic Zod catalog, types, visibility, validation, actions, observable store primitives (`StagingBuffer`, `ObservableDataModel`).       | Live   |
+| `@json-ui/react`    | React 19 renderer with `DataProvider`, `ActionProvider`, `ValidationProvider`, `VisibilityProvider`. External-store mode via `useSyncExternalStore`. | Live   |
+| `@json-ui/headless` | Framework-agnostic renderer that produces a `NormalizedNode` tree for the LLM Observer Layer. Dual-backend friendly.                                | Live   |
 
 Top-level scripts (run from the repo root):
 
@@ -50,12 +50,15 @@ When implementing `StagingBuffer` and `ObservableDataModel`:
 - Subscribers fire **synchronously** before `set`/`delete`/`reconcile` returns. Listener errors are swallowed via `console.error` per spec.
 - `validateJSONValue` rejects 22 disqualified values: `undefined`, `BigInt`, `Symbol`, function, `NaN`, `±Infinity`, `Date`, `RegExp`, `Error`, `Map`, `Set`, `WeakMap`, `WeakSet`, `Promise`, `ArrayBuffer`, `SharedArrayBuffer`, all typed arrays, `URL`, circular references, and any object whose prototype is neither `Object.prototype` nor `null`. Tests cover each in three positions (top-level, nested in object, nested in array).
 
-### Headless renderer (Plan 3, in flight)
+### Headless renderer (Plan 3, live)
 
 - `render(tree)` is a **pure function of `(tree, store-snapshots)`**. Components receive `ReadonlyStagingView` / `ReadonlyDataView` — no write methods, enforced at the type level.
-- `HeadlessContext.resolveDynamic` consults BOTH staging AND data. For `{path: "<id>"}`: if the path has no `/` and staging has the key, prefer staging; otherwise fall back to data. This is non-obvious and was a bug in the first draft.
-- `RenderHooks` payloads must be JSON-`stringify`/`parse` round-trip safe. No `Date`, `Map`, function, class instance, or `BigInt` in any hook event. The `integration.test.ts` round-trip test enforces this.
+- **Views bind to a FROZEN pass-start snapshot**, not to the live store. `makeStagingView` / `makeDataView` in `packages/headless/src/context.ts` call `buf.snapshot()` / `data.snapshot()` at construction time and close over the result. Because the renderer builds a fresh context per `render()` pass, any mid-render mutation through the live store (e.g., a hook callback writing via the session's public methods) cannot leak into later elements of the same pass. This is what makes Invariant 15 (render-pass purity) structural rather than a convention. The first draft delegated live and failed Invariant 15 — caught in the Opus implementation review.
+- **Both `resolveDynamic` AND `resolveAction` consult BOTH staging AND data** with the same rule: for `{path: "<id>"}`, if the path has no `/` and staging has the key, prefer staging; otherwise walk the data snapshot via `getByPath`. The first Plan 3 draft only applied the rule to `resolveDynamic` — `resolveAction` delegated to core and silently dropped staging-only field IDs. Caught in review. Any future resolver must use the same rule.
+- `RenderHooks` payloads must be JSON-`stringify`/`parse` round-trip safe. No `Date`, `Map`, function, class instance, or `BigInt` in any hook event. The `integration.test.ts` round-trip test enforces this — but **compare the round-trip against the ORIGINAL payload**, never against another round-trip (`x.toEqual(x)` with extra steps passes vacuously). Always add a negative-control test that proves the assertion fires. Both mistakes landed in Plan 3's first draft.
 - The walker emits `onElementRender` in **post-order**: children fire before their parent. The renderer test asserts `["a", "b", "root"]` for a parent with two children.
+- Every emitted `NormalizedNode` has `meta.visible === true`. Pruned nodes are ABSENT from output, not flagged. The `type: "Empty"` root placeholder is the distinct signal for callers that want to detect a fully invisible tree.
+- `destroy()` uses a **flag-based** guard: the `destroyed` flag plus `ensureAlive()` on every public method prevents hook dispatch post-destroy. Do NOT mutate the composed hooks object — that was correctness-by-accident in the first draft.
 - `serializers/Serializer` interface lives in its OWN file (`serializers/types.ts`) — putting it in `serializers/index.ts` creates a circular import with `json.ts`/`html.ts`.
 
 ## Specs and plans
@@ -65,13 +68,13 @@ Design + planning workflow uses two folders:
 - `docs/specs/YYYY-MM-DD-<topic>-design.md` — the design spec, written via the brainstorming skill, reviewed by an Opus + Sonnet team, finalized before any implementation work.
 - `docs/plans/YYYY-MM-DD-<topic>-plan.md` — the bite-sized implementation plan, written via the writing-plans skill, reviewed by an Opus + Sonnet team armed with the RLM skill, then run through HonestClaude before commit.
 
-Current plans (April 2026):
+Shipped plans (April 2026) — all live on `main`:
 
-1. `2026-04-13-core-runtime-types-plan.md` — Plan 1 (prerequisite). Adds `packages/core/src/runtime.ts`.
-2. `2026-04-13-react-external-data-store-plan.md` — Plan 2. Refactors `DataProvider` with split-component dispatcher.
-3. `2026-04-13-headless-renderer-plan.md` — Plan 3 (main deliverable). Builds `@json-ui/headless` from scratch.
+1. `2026-04-13-core-runtime-types-plan.md` — Plan 1 (prerequisite). Added `packages/core/src/runtime.ts`.
+2. `2026-04-13-react-external-data-store-plan.md` — Plan 2. Refactored `DataProvider` with split-component dispatcher.
+3. `2026-04-13-headless-renderer-plan.md` — Plan 3. Built `@json-ui/headless` from scratch.
 
-Each plan is independently executable but Plan 1 must land before Plan 2 or Plan 3.
+No plans queued. Future rounds will be brainstormed separately.
 
 ## Dropbox sync gotcha
 
