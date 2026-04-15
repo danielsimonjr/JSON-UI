@@ -50,6 +50,15 @@ When implementing `StagingBuffer` and `ObservableDataModel`:
 - Subscribers fire **synchronously** before `set`/`delete`/`reconcile` returns. Listener errors are swallowed via `console.error` per spec.
 - `validateJSONValue` rejects 22 disqualified values: `undefined`, `BigInt`, `Symbol`, function, `NaN`, `±Infinity`, `Date`, `RegExp`, `Error`, `Map`, `Set`, `WeakMap`, `WeakSet`, `Promise`, `ArrayBuffer`, `SharedArrayBuffer`, all typed arrays, `URL`, circular references, and any object whose prototype is neither `Object.prototype` nor `null`. Tests cover each in three positions (top-level, nested in object, nested in array).
 
+### Neural Computer integration helpers (Path C)
+
+The Neural Computer runtime's "Path C" integration uses `@json-ui/react` for the user and `@json-ui/headless` for the LLM Observer, both driving one shared `StagingBuffer` and one shared `ObservableDataModel`. To support that shape without forcing NC to hand-roll plumbing, core ships:
+
+- **`collectFieldIds(tree)`** in `@json-ui/core` — walks a `UITree` and returns `Set<FieldId>` for reconciliation. Moved from headless into core in 2026-04-14 so the React path can reach it without pulling headless in. The old headless location is a thin re-export for back-compat.
+- **`validateUniqueFieldIds(tree)`** in `@json-ui/core` — throws `DuplicateFieldIdError` when two elements share an `id` prop. Call this at tree-emission time, before reconciliation runs, to catch catalog-authoring bugs where the LLM re-used a field ID.
+- **`resolveActionWithStaging(action, staging, data)`** in `@json-ui/core` — the single implementation of the "staging wins for single-segment paths, data wins otherwise" rule. Used by both `@json-ui/headless`'s context AND NC's React-side action handler. Any future resolver that takes `DynamicValue` literals must call into this helper or the sibling `resolveStagingOrDataPath` / `preResolveDynamicParams` pair — do NOT reimplement the rule inline.
+- **`StagingProvider` + `useStaging` / `useStagingField` / `useStagingSnapshot`** in `@json-ui/react` — binds a `StagingBuffer` via `useSyncExternalStore`. Supports both internal mode (provider creates its own buffer) and external mode (caller passes a buffer that is ALSO consumed by a headless renderer session for the LLM Observer). Rules-of-hooks single-component dispatcher — both modes use the same hook shape, so no split required.
+
 ### Headless renderer (Plan 3, live)
 
 - `render(tree)` is a **pure function of `(tree, store-snapshots)`**. Components receive `ReadonlyStagingView` / `ReadonlyDataView` — no write methods, enforced at the type level.
