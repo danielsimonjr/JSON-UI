@@ -30,11 +30,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build
+        # Build first: the headless/react workspace packages import the built
+        # @json-ui/core (its types live in dist/index.d.ts via tsup). typecheck
+        # and tests fail with "Cannot find module '@json-ui/core'" otherwise.
+        run: npm run build
+
       - name: Type check
         run: npm run typecheck
 
       - name: Test
         run: npm test
-
-      - name: Build
-        run: npm run build
