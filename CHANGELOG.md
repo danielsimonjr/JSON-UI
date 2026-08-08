@@ -26,6 +26,13 @@ In addition, this project uses two non-standard sections that fit how the work i
 
 ## [Unreleased]
 
+### Security
+
+- `nanoid` 3.3.16 -> 3.3.18 (GHSA-2v37-7h3g-55p8, `<3.3.17`). Lock-only, nanoid alone;
+  typecheck and tests green. A blanket `npm update` of all four swept packages broke the
+  gates here, so only the package actually flagged was moved.
+
+
 ### Added
 
 - **`@json-ui/core` Neural Computer integration helpers** — three new modules added to core so the Neural Computer runtime can implement its "Path C" (React + headless renderer both driving one shared `StagingBuffer` and one shared `ObservableDataModel`) without hand-rolling the reconciliation, field-ID validation, or staging-aware action resolution pieces.
