@@ -27,17 +27,22 @@ jobs:
           node-version: 20
           cache: "npm"
 
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.4.0'
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build
         # Build first: the headless/react workspace packages import the built
         # @json-ui/core (its types live in dist/index.d.ts via tsup). typecheck
         # and tests fail with "Cannot find module '@json-ui/core'" otherwise.
-        run: npm run build
+        run: bun run build
 
       - name: Type check
-        run: npm run typecheck
+        run: bun run typecheck
 
       - name: Test
-        run: npm test
+        run: bun run test
