@@ -143,6 +143,16 @@ export interface Catalog<
 }
 
 /**
+ * Catalog without preserving component/action generics. Method variance
+ * makes a specific `Catalog<MyComponents>` unassignable to the default
+ * `Catalog` type; hosts that store catalogs on a runtime handle (Neural
+ * Computer) should use this alias instead of `Catalog<any, any, any>`
+ * at every call site.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyCatalog = Catalog<any, any, any>;
+
+/**
  * Create a v2 catalog with visibility, actions, and validation support
  */
 export function createCatalog<

@@ -26,6 +26,26 @@ In addition, this project uses two non-standard sections that fit how the work i
 
 ## [Unreleased]
 
+### Added
+
+- **`AnyCatalog` type** (`@json-ui/core`). Method variance makes a specific
+  `Catalog<MyComponents>` unassignable to the default `Catalog` type. Neural
+  Computer (and any host that stores a catalog on a runtime handle) should
+  use `AnyCatalog` instead of repeating `Catalog<any, any, any>`.
+- **`ObservableDataModel.write?`** (`@json-ui/core`). Orchestrator write
+  seam. `createObservableDataModel` implements it as `set()`. React
+  `DataProvider` still uses `set()`. Read-only adapters (memoryjs) keep
+  throwing on `set()` and may implement `write()` as an awaited
+  transaction.
+- **`JSONUIProvider` registry context** (`@json-ui/react`). `registry` is
+  optional on both `JSONUIProvider` and `Renderer`. Nested `Renderer`
+  inherits the provider registry; an explicit prop wins. Neural Computer
+  no longer has to pass the same object twice.
+- **`ComponentRenderer` bivariant call signature.** Host memoized
+  components that only declare `{element, children}` (Neural Computer)
+  type-check without `as ComponentRenderer` casts. The renderer still
+  passes `onAction` and `loading` at runtime.
+
 ### Security
 
 - `nanoid` 3.3.16 -> 3.3.18 (GHSA-2v37-7h3g-55p8, `<3.3.17`). Lock-only, nanoid alone;

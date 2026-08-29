@@ -207,6 +207,13 @@ describe("createObservableDataModel - basic operations", () => {
     expect(typeof model.delete).toBe("function");
     expect(typeof model.snapshot).toBe("function");
     expect(typeof model.subscribe).toBe("function");
+    expect(typeof model.write).toBe("function");
+  });
+
+  test("write is set: in-memory stores persist through the orchestrator seam", () => {
+    const m = createObservableDataModel();
+    m.write!("note", "hello");
+    expect(m.get("note")).toBe("hello");
   });
 });
 

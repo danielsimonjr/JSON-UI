@@ -12,12 +12,7 @@ export type FieldId = string;
  * themselves JSONValue.
  */
 export type JSONValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JSONValue[]
-  | { [key: string]: JSONValue };
+  null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue };
 
 /** A plain-JSON snapshot of a staging buffer at a single point in time. */
 export type StagingSnapshot = Record<FieldId, JSONValue>;
@@ -319,6 +314,16 @@ export interface ObservableDataModel {
    * parent containers (per spec Open Question 2 — leave-empty semantics).
    */
   delete(path: string): void;
+  /**
+   * Orchestrator write seam. React `DataProvider` keeps using `set()`
+   * (synchronous, may throw on read-only adapters). Neural Computer's
+   * intent handler prefers `write()` so memoryjs hosts can await a
+   * transaction without pretending `set()` is async.
+   *
+   * The in-memory factory implements this as `set()`. Adapters may
+   * omit it; callers then fall back to `set()`.
+   */
+  write?(path: string, value: JSONValue): void | Promise<void>;
   snapshot(): Readonly<Record<string, JSONValue>>;
   subscribe(callback: () => void): () => void;
 }
@@ -446,17 +451,22 @@ export function createObservableDataModel(
     }
   };
 
+  const set = (path: string, value: JSONValue): void => {
+    // Mirror the delete() pattern: only notify subscribers if the path
+    // helper actually wrote something. Empty paths are a no-op that must
+    // not fire spurious notifications or invalidate the snapshot cache.
+    if (setAtPath(root, path, value)) {
+      invalidateAndNotify();
+    }
+  };
+
   return {
     get(path) {
       return getAtPath(root, path);
     },
-    set(path, value) {
-      // Mirror the delete() pattern: only notify subscribers if the path
-      // helper actually wrote something. Empty paths are a no-op that must
-      // not fire spurious notifications or invalidate the snapshot cache.
-      if (setAtPath(root, path, value)) {
-        invalidateAndNotify();
-      }
+    set,
+    write(path, value) {
+      set(path, value);
     },
     delete(path) {
       if (deleteAtPath(root, path)) {

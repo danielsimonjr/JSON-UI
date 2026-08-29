@@ -85,6 +85,7 @@ export type {
   ComponentDefinition,
   CatalogConfig,
   Catalog,
+  AnyCatalog,
   InferCatalogComponentProps,
 } from "./catalog";
 

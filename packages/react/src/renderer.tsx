@@ -1,6 +1,11 @@
 "use client";
 
-import React, { type ComponentType, type ReactNode, useMemo } from "react";
+import React, {
+  type ComponentType,
+  type ReactNode,
+  createContext,
+  useContext,
+} from "react";
 import type {
   UIElement,
   UITree,
@@ -10,7 +15,6 @@ import type {
 } from "@json-ui/core";
 import { useIsVisible } from "./contexts/visibility";
 import { useActions } from "./contexts/actions";
-import { useData } from "./contexts/data";
 
 /**
  * Props passed to component renderers
@@ -27,11 +31,15 @@ export interface ComponentRenderProps<P = Record<string, unknown>> {
 }
 
 /**
- * Component renderer type
+ * Component renderer type.
+ *
+ * Uses a bivariant call signature so host memoized components that only
+ * declare `{ element, children }` (Neural Computer) assign without
+ * `as` casts, while the renderer may still pass `onAction` and `loading`.
  */
-export type ComponentRenderer<P = Record<string, unknown>> = ComponentType<
-  ComponentRenderProps<P>
->;
+export type ComponentRenderer<P = Record<string, unknown>> = {
+  bivarianceHack(props: ComponentRenderProps<P>): React.ReactNode;
+}["bivarianceHack"];
 
 /**
  * Registry of component renderers
@@ -44,8 +52,11 @@ export type ComponentRegistry = Record<string, ComponentRenderer<any>>;
 export interface RendererProps {
   /** The UI tree to render */
   tree: UITree | null;
-  /** Component registry */
-  registry: ComponentRegistry;
+  /**
+   * Component registry. Optional when a `JSONUIProvider` ancestor
+   * already provided one; an explicit prop wins.
+   */
+  registry?: ComponentRegistry;
   /** Whether the tree is currently loading/streaming */
   loading?: boolean;
   /** Fallback component for unknown types */
@@ -113,6 +124,14 @@ function ElementRenderer({
  * Main renderer component
  */
 export function Renderer({ tree, registry, loading, fallback }: RendererProps) {
+  const contextRegistry = useContext(ComponentRegistryContext);
+  const resolvedRegistry = registry ?? contextRegistry;
+  if (!resolvedRegistry) {
+    throw new Error(
+      "Renderer requires a registry prop, or a JSONUIProvider ancestor that provided one",
+    );
+  }
+
   if (!tree || !tree.root) {
     return null;
   }
@@ -126,7 +145,7 @@ export function Renderer({ tree, registry, loading, fallback }: RendererProps) {
     <ElementRenderer
       element={rootElement}
       tree={tree}
-      registry={registry}
+      registry={resolvedRegistry}
       loading={loading}
       fallback={fallback}
     />
@@ -137,8 +156,12 @@ export function Renderer({ tree, registry, loading, fallback }: RendererProps) {
  * Props for JSONUIProvider
  */
 export interface JSONUIProviderProps {
-  /** Component registry */
-  registry: ComponentRegistry;
+  /**
+   * Component registry. Optional: hosts that only need contexts (data,
+   * staging, actions) can omit it. When provided, nested `Renderer`
+   * components inherit it unless they pass their own `registry` prop.
+   */
+  registry?: ComponentRegistry;
   /** Initial data model — ignored when `store` is provided. */
   initialData?: Record<string, unknown>;
   /**
@@ -223,6 +246,10 @@ import { ActionProvider } from "./contexts/actions";
 import { ValidationProvider } from "./contexts/validation";
 import { ConfirmDialog } from "./contexts/actions";
 
+const ComponentRegistryContext = createContext<ComponentRegistry | undefined>(
+  undefined,
+);
+
 /**
  * Combined provider for all JSONUI contexts. See `JSONUIProviderProps`
  * for the `store` and `stagingStore` props added for NC Path C.
@@ -252,7 +279,7 @@ export function JSONUIProvider({
       children
     );
 
-  return (
+  const tree = (
     <DataProvider
       initialData={initialData}
       store={store}
@@ -280,6 +307,15 @@ export function JSONUIProvider({
         </ActionProvider>
       </VisibilityProvider>
     </DataProvider>
+  );
+
+  if (registry === undefined) {
+    return tree;
+  }
+  return (
+    <ComponentRegistryContext.Provider value={registry}>
+      {tree}
+    </ComponentRegistryContext.Provider>
   );
 }
 
