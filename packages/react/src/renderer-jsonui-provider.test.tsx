@@ -11,8 +11,8 @@ import { useData } from "./contexts/data";
 import { useStaging, useStagingField } from "./contexts/staging";
 import { useAction } from "./contexts/actions";
 
-// Minimal registry — JSONUIProvider requires it structurally but none of
-// these tests render catalog components, so an empty object is fine.
+// Minimal registry — optional on JSONUIProvider; none of these tests render
+// catalog components, so an empty object is fine when a registry is passed.
 const registry = {} as never;
 
 describe("JSONUIProvider — backward compat (no external stores)", () => {
