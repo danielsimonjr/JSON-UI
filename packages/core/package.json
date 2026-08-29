@@ -1,6 +1,6 @@
 {
   "name": "@json-ui/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "description": "Core schemas, types, catalog, actions, visibility, and validation for JSON-UI. Framework-agnostic.",
   "keywords": [

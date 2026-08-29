@@ -26,6 +26,8 @@ In addition, this project uses two non-standard sections that fit how the work i
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-29
+
 ### Added
 
 - **`AnyCatalog` type** (`@json-ui/core`). Method variance makes a specific
@@ -46,14 +48,6 @@ In addition, this project uses two non-standard sections that fit how the work i
   type-check without `as ComponentRenderer` casts. The renderer still
   passes `onAction` and `loading` at runtime.
 
-### Security
-
-- `nanoid` 3.3.16 -> 3.3.18 (GHSA-2v37-7h3g-55p8, `<3.3.17`). Lock-only, nanoid alone;
-  typecheck and tests green. A blanket `npm update` of all four swept packages broke the
-  gates here, so only the package actually flagged was moved.
-
-
-### Added
 
 - **`@json-ui/core` Neural Computer integration helpers** — three new modules added to core so the Neural Computer runtime can implement its "Path C" (React + headless renderer both driving one shared `StagingBuffer` and one shared `ObservableDataModel`) without hand-rolling the reconciliation, field-ID validation, or staging-aware action resolution pieces.
   - **`collectFieldIds(tree)`** — walks a `UITree` and returns `Set<FieldId>` containing every non-empty string `id` prop. Moved from `@json-ui/headless` into `@json-ui/core` so the React path can reach it without pulling in the whole headless package. The headless helper at `packages/headless/src/helpers/collect-ids.ts` is now a thin re-export for back-compat with the renderer's internal import. The 6 tests moved with the implementation.
@@ -99,6 +93,20 @@ In addition, this project uses two non-standard sections that fit how the work i
 
 ### Fixed
 
+- **Two `### Added` sections coexisted inside `[Unreleased]`.** Keep a Changelog allows one section
+  per change type; a reader scanning for what is new saw the first block and could stop there, with
+  the larger second block (the core runtime types, the headless package, the React store bindings)
+  sitting below `### Security` where nothing looks for additions. Merged into a single `### Added`
+  and the whole entry reordered into the spec's canonical sequence (Added, Fixed, Security, then
+  this project's own trailing sections). Verified content-preserving: 74 content lines before and
+  after, identical as a sorted multiset — only headings moved.
+- **`vitest.config.ts` was ESM source loaded as CommonJS**, which Vite warned about on every single
+  test run and has announced it will stop supporting once `configLoader: 'native'` becomes the
+  default. Renamed to `vitest.config.mts` so the extension declares the module system, rather than
+  adding `"type": "module"` to the private root package, which would have reinterpreted every other
+  non-ESM file in the repo root to silence one warning. 30 files / 492 tests green after the rename,
+  and the warning is gone.
+
 - **`ObservableDataModel.get("")` was returning the live mutable `root`** (found by the Opus+Sonnet implementation review). Callers mutating the returned reference could bypass `invalidateAndNotify()`, leaving the cached snapshot stale and breaking React's `useSyncExternalStore` tearing protection (the `Object.is(prev, next)` check would return `true` after content mutation because both references were the same object). Fixed by returning `undefined` for the empty path — callers that want the whole state must use `snapshot()`.
 - **`ObservableDataModel.set("")` was firing spurious subscriber notifications on no-op writes** (found by the same review). `setAtPath` returned early when `parts.length === 0` but the enclosing `set()` still called `invalidateAndNotify()` unconditionally, triggering React re-renders for writes that never happened. Fixed by making `setAtPath` return a boolean indicating whether it wrote, mirroring the existing `deleteAtPath` pattern; the enclosing `set()` now guards the notify on that boolean.
 - **`Set<() => void>` listener deduplication** (found during Task 4 implementation, not by the plan review). The plan's listener storage used `Set<() => void>`, which dedupes identical function references. Registering the same callback twice would collapse into one subscription, failing the spec's "two independent subscriptions" invariant. Fixed by switching to `Map<symbol, () => void>` where each `subscribe()` call mints a unique `Symbol` key. Applied consistently across both `StagingBuffer` and `ObservableDataModel`.
@@ -117,6 +125,12 @@ In addition, this project uses two non-standard sections that fit how the work i
 - **`@json-ui/headless` `Empty`-root placeholder had `meta.visible: false`** (found by the Opus review). The spec says "every emitted node has `meta.visible === true`; pruned nodes are ABSENT from output, not flagged." The walker's root-invisible / root-missing fallback violated this. Changed to `meta.visible: true` — the `type: "Empty"` field is the distinct signal for callers that want to detect the placeholder.
 
 - **`@json-ui/headless` stale `MAX_CAUSE_DEPTH` JSDoc** (found by the Sonnet review). The JSDoc on `toSerializableError` said "walks up to 8 levels" but the constant is 9. Corrected and added the counting rule to prevent future confusion.
+
+### Security
+
+- `nanoid` 3.3.16 -> 3.3.18 (GHSA-2v37-7h3g-55p8, `<3.3.17`). Lock-only, nanoid alone;
+  typecheck and tests green. A blanket `npm update` of all four swept packages broke the
+  gates here, so only the package actually flagged was moved.
 
 ### Project meta
 

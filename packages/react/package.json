@@ -1,6 +1,6 @@
 {
   "name": "@json-ui/react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "description": "React renderer for @json-ui/core. Renders catalog-constrained JSON trees as React components with data binding, actions, visibility, and validation.",
   "keywords": [
