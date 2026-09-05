@@ -10,7 +10,7 @@ Upstream lineage: `vercel-labs/json-render` → `danielsimonjr/JSON-UI`. We are 
 
 ## Workspace layout
 
-npm workspaces monorepo. Three packages under `packages/`:
+Bun workspaces monorepo (`bun.lock`). Three packages under `packages/`:
 
 | Package             | Purpose                                                                                                                                             | Status |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -18,12 +18,15 @@ npm workspaces monorepo. Three packages under `packages/`:
 | `@json-ui/react`    | React 19 renderer with `DataProvider`, `ActionProvider`, `ValidationProvider`, `VisibilityProvider`. External-store mode via `useSyncExternalStore`. | Live   |
 | `@json-ui/headless` | Framework-agnostic renderer that produces a `NormalizedNode` tree for the LLM Observer Layer. Dual-backend friendly.                                | Live   |
 
-Top-level scripts (run from the repo root):
+Top-level scripts (run from the repo root; package manager is Bun):
 
-- `npm test` — vitest run across all packages (jsdom env, globals enabled)
-- `npm run typecheck` — `tsc --noEmit` across all workspaces
-- `npm run build` — `tsup` build for every package
-- `npm run format` — prettier on `**/*.{ts,tsx,json,md}`
+- `bun install --frozen-lockfile` — install from `bun.lock`
+- `bun run test` — vitest run across all packages (jsdom env, globals enabled)
+- `bun run typecheck` — `tsc --noEmit` across all workspaces
+- `bun run build` — `tsup` build for every package
+- `bun run format` — prettier on `**/*.{ts,tsx,json,md}`
+
+`typecheck` and `build` fan out with Bun's native `--workspaces --if-present`. Do not rewrite them as nested `npm run … --workspaces` under Bun — that recurses infinitely.
 
 ## Critical conventions
 

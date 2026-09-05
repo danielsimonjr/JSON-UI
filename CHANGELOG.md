@@ -26,6 +26,10 @@ In addition, this project uses two non-standard sections that fit how the work i
 
 ## [Unreleased]
 
+### Project meta
+
+- **Bun as the documented package manager.** Root `packageManager` is `bun@1.4.2`, `engines.bun` is `>=1.4.0`, unused `tsx` removed, CI Bun pin bumped to 1.4.2, and `AGENTS.md` / `CLAUDE.md` / `README.md` document `bun install` / `bun run` instead of npm for local development. Vitest + tsup remain the test/build toolchain.
+
 ## [0.2.0] - 2026-08-29
 
 ### Added
