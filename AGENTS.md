@@ -8,7 +8,9 @@ Instructions for AI coding agents working with this codebase.
 
 ## Workflow
 
-- Run `npm run typecheck` after each turn to ensure type safety
+- Use Bun for install and scripts (`bun install --frozen-lockfile`, `bun run …`)
+- Run `bun run typecheck` after each turn to ensure type safety
+- After dependency changes, run `bun run build` before typecheck/tests — workspace packages consume built `@json-ui/core` types from `dist/`
 
 <!-- opensrc:start -->
 

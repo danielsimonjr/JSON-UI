@@ -52,7 +52,16 @@ Your renderer registers components against the catalog and the LLM produces JSON
 
 ## Status
 
-Early fork. Identity rewritten, lightweight structure, no monorepo plumbing (npm workspaces only, no pnpm or turbo). The React backend is inherited from the upstream and works. A headless renderer is planned as the next addition.
+Early fork. Identity rewritten, lightweight structure: Bun workspaces (`bun.lock`), no pnpm or turbo. The React and headless backends are live.
+
+### Develop
+
+```bash
+bun install --frozen-lockfile
+bun run build
+bun run typecheck
+bun run test
+```
 
 ## Prior art
 
